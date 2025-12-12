@@ -1,0 +1,173 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>2-List To-Do (Today / Tomorrow)</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 16px; max-width: 720px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+    .tab { padding: 10px 12px; border: 1px solid #ccc; border-radius: 12px; cursor: pointer; background: #fff; }
+    .tab.active { border-color: #111; }
+    .row { display: flex; gap: 8px; align-items: center; }
+    input[type="text"] { flex: 1; padding: 10px 12px; border-radius: 12px; border: 1px solid #ccc; }
+    button { padding: 10px 12px; border-radius: 12px; border: 1px solid #ccc; background: #fff; cursor: pointer; }
+    ul { list-style: none; padding: 0; margin: 12px 0 0; }
+    li { border: 1px solid #eee; border-radius: 14px; padding: 10px; margin-bottom: 10px; }
+    .task { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+    .task-text { flex: 1; }
+    .muted { color: #666; font-size: 12px; margin-top: 8px; }
+    .danger { border-color: #f2b8b5; }
+  </style>
+</head>
+<body>
+  <h2>To-Do</h2>
+
+  <div class="tabs">
+    <div class="tab active" id="tab-today">Do-Today</div>
+    <div class="tab" id="tab-tomorrow">Do-Tomorrow</div>
+  </div>
+
+  <div class="row">
+    <input id="newTask" type="text" placeholder="Add a task…" />
+    <button id="addBtn">Add</button>
+  </div>
+
+  <div class="muted" id="status"></div>
+  <ul id="list"></ul>
+
+<script>
+  // 1) Paste your Apps Script Web App URL here
+  const API_URL = "https://script.google.com/macros/s/AKfycbwZauW2-ItGmQzavsJq6QJ2pe_Mc7LhYpl9Jm38AQT-0NsSeQaPI0tHPdQyziKqcSnq/exec";
+
+  let currentList = "today";
+  let items = [];
+
+  const $ = (sel) => document.querySelector(sel);
+  const statusEl = $("#status");
+  const listEl = $("#list");
+
+  function setStatus(msg) { statusEl.textContent = msg || ""; }
+
+  async function apiGet(params) {
+    const url = new URL(API_URL);
+    Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, v));
+    const res = await fetch(url.toString(), { method: "GET" });
+    return res.json();
+  }
+
+  async function apiPost(payload) {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload)
+    });
+    return res.json();
+  }
+
+  function render() {
+    $("#tab-today").classList.toggle("active", currentList === "today");
+    $("#tab-tomorrow").classList.toggle("active", currentList === "tomorrow");
+
+    listEl.innerHTML = "";
+    const filtered = items.filter(x => (x.list || "").toLowerCase() === currentList);
+
+    if (filtered.length === 0) {
+      const empty = document.createElement("li");
+      empty.textContent = "No tasks here yet.";
+      listEl.appendChild(empty);
+      return;
+    }
+
+    for (const it of filtered) {
+      const li = document.createElement("li");
+
+      const wrap = document.createElement("div");
+      wrap.className = "task";
+
+      const text = document.createElement("div");
+      text.className = "task-text";
+      text.textContent = it.text;
+
+      const actions = document.createElement("div");
+      actions.className = "row";
+
+      const moveBtn = document.createElement("button");
+      moveBtn.textContent = currentList === "today" ? "→ Tomorrow" : "← Today";
+      moveBtn.onclick = async () => {
+        setStatus("Moving…");
+        const to = currentList === "today" ? "tomorrow" : "today";
+        const out = await apiPost({ action: "move", id: it.id, to });
+        if (!out.ok) return setStatus("Error: " + out.error);
+        await refresh();
+      };
+
+      const editBtn = document.createElement("button");
+      editBtn.textContent = "Edit";
+      editBtn.onclick = async () => {
+        const next = prompt("Edit task:", it.text);
+        if (next === null) return;
+        const t = next.trim();
+        if (!t) return;
+        setStatus("Saving…");
+        const out = await apiPost({ action: "update", id: it.id, text: t });
+        if (!out.ok) return setStatus("Error: " + out.error);
+        await refresh();
+      };
+
+      const delBtn = document.createElement("button");
+      delBtn.textContent = "Delete";
+      delBtn.className = "danger";
+      delBtn.onclick = async () => {
+        if (!confirm("Delete this task?")) return;
+        setStatus("Deleting…");
+        const out = await apiPost({ action: "delete", id: it.id });
+        if (!out.ok) return setStatus("Error: " + out.error);
+        await refresh();
+      };
+
+      actions.appendChild(moveBtn);
+      actions.appendChild(editBtn);
+      actions.appendChild(delBtn);
+
+      wrap.appendChild(text);
+      wrap.appendChild(actions);
+      li.appendChild(wrap);
+      listEl.appendChild(li);
+    }
+  }
+
+  async function refresh() {
+    setStatus("Loading…");
+    const out = await apiGet({ action: "list" });
+    if (!out.ok) {
+      setStatus("Error: " + out.error);
+      return;
+    }
+    items = out.items || [];
+    setStatus(`Loaded ${items.length} task(s).`);
+    render();
+  }
+
+  async function addTask() {
+    const text = $("#newTask").value.trim();
+    if (!text) return;
+    $("#newTask").value = "";
+    setStatus("Adding…");
+    const out = await apiPost({ action: "add", text, list: currentList });
+    if (!out.ok) return setStatus("Error: " + out.error);
+    await refresh();
+  }
+
+  $("#addBtn").addEventListener("click", addTask);
+  $("#newTask").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") addTask();
+  });
+
+  $("#tab-today").addEventListener("click", async () => { currentList = "today"; render(); });
+  $("#tab-tomorrow").addEventListener("click", async () => { currentList = "tomorrow"; render(); });
+
+  refresh();
+</script>
+</body>
+</html>
