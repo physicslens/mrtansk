@@ -6,10 +6,10 @@
   <title>2-List To-Do (Today / Tomorrow)</title>
   <style>
     :root { color-scheme: light; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 16px; max-width: 760px; }
-    h2 { margin: 0 0 12px; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 16px; max-width: 760px; background: #f9f9f7; }
+    h2 { margin: 0 0 12px; display: none; }
 
-    .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+    .tabs { display: none; }
     .tab {
       padding: 10px 12px; border: 1px solid #ccc; border-radius: 14px;
       cursor: pointer; background: #fff; user-select: none;
@@ -17,10 +17,13 @@
     .tab.active { border-color: #111; }
 
     .row { display: flex; gap: 8px; align-items: center; }
+    .add-row { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
     input[type="text"] {
       flex: 1; padding: 10px 12px; border-radius: 14px; border: 1px solid #ccc;
       outline: none;
     }
+    .add-row input[type="text"] { border: none; border-radius: 0; padding: 8px 0; background: transparent; font-family: "Noteworthy", "Marker Felt", system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+    .add-row input::placeholder { color: #aaa; }
     button {
       padding: 10px 12px; border-radius: 14px; border: 1px solid #ccc;
       background: #fff; cursor: pointer;
@@ -31,25 +34,59 @@
     li { border: 1px solid #eee; border-radius: 16px; padding: 10px; margin-bottom: 10px; }
     .task { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
     .task-text { flex: 1; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .task-text { cursor: pointer; }
+    .task.done .task-text { text-decoration: line-through; color: #999; }
+    .task-text a { color: #06c; text-decoration: underline; }
 
     .muted { color: #666; font-size: 12px; margin-top: 8px; min-height: 16px; }
     .danger { border-color: #f2b8b5; }
 
     .footer-actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
     .pill { font-size: 12px; color: #555; border: 1px solid #eee; padding: 6px 10px; border-radius: 999px; }
+    #datePill { display: none; }
+
+    .header { margin-bottom: 12px; }
+    .title-row { display: flex; align-items: center; justify-content: space-between; }
+    .title-row h1 { display: none; }
+    .title-toggle { display: flex; gap: 12px; align-items: baseline; }
+    .title-link { font-size: 28px; letter-spacing: .5px; background: transparent; border: 0; padding: 0; cursor: pointer; color: #999; }
+    .title-link.active { color: #111; font-weight: 600; }
+    .date { color: #666; font-size: 14px; }
+    .edit-btn { font-size: 12px; padding: 6px 10px; border-radius: 10px; border: 1px solid #ccc; background: #fff; cursor: pointer; }
+    .edit-btn.active { border-color: #111; }
+    .flourish { text-align: center; color: #999; margin: 10px 0; }
+    li { border: none; border-bottom: 1px solid #eee; border-radius: 0; }
+    .task-text { font-family: "Noteworthy", "Marker Felt", system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+    .arrow-btn { padding: 6px 10px; }
+    .arrow-btn[data-dir="right"] { }
+    .arrow-btn[data-dir="left"] { }
+    .day-toggle { display: flex; gap: 8px; align-items: center; }
+    .day-link { font-size: 14px; padding: 0; border: 0; background: transparent; cursor: pointer; color: #999; }
+    .day-link.active { color: #111; font-weight: 600; }
   </style>
 </head>
 <body>
   <h2>To-Do</h2>
+
+  <div class="header">
+    <div class="title-row">
+      <div class="title-toggle">
+        <button id="toggleToday" class="title-link">TODAY</button>
+        <button id="toggleTomorrow" class="title-link">TOMORROW</button>
+      </div>
+      <button id="editToggle" class="edit-btn">edit</button>
+    </div>
+    <div id="headerDate" class="date"></div>
+    <div class="flourish">⁓</div>
+  </div>
 
   <div class="tabs">
     <div class="tab active" id="tab-today">Do-Today</div>
     <div class="tab" id="tab-tomorrow">Do-Tomorrow</div>
   </div>
 
-  <div class="row">
-    <input id="newTask" type="text" placeholder="Add a task…" autocomplete="off" />
-    <button id="addBtn">Add</button>
+  <div class="add-row">
+    <input id="newTask" type="text" placeholder="+ add a new task" autocomplete="off" autofocus />
   </div>
 
   <div class="muted" id="status"></div>
@@ -57,8 +94,8 @@
   <ul id="list"></ul>
 
   <div class="footer-actions">
-    <span class="pill" id="countPill">0 task(s)</span>
-    <button id="reloadBtn" title="Reload from Sheet">Reload</button>
+    <span class="pill" id="datePill"></span>
+    <span class="pill" id="loadedPill"></span>
   </div>
 
 <script>
@@ -76,16 +113,21 @@
   const $ = (sel) => document.querySelector(sel);
   const statusEl = $("#status");
   const listEl = $("#list");
-  const addBtn = $("#addBtn");
-  const reloadBtn = $("#reloadBtn");
-  const countPill = $("#countPill");
+  const datePill = $("#datePill");
+  const loadedPill = $("#loadedPill");
+  const headerDate = $("#headerDate");
+  const editToggle = $("#editToggle");
+  const toggleToday = $("#toggleToday");
+  const toggleTomorrow = $("#toggleTomorrow");
+  let editMode = false;
+  let dayChanged = false;
 
   function setStatus(msg) { statusEl.textContent = msg || ""; }
 
+  function setLoadedInfo(msg) { if (loadedPill) loadedPill.textContent = msg || ""; }
+
   function setBusy(v) {
     busy = v;
-    addBtn.disabled = v;
-    reloadBtn.disabled = v;
     $("#newTask").disabled = v;
     // Disable action buttons in list
     document.querySelectorAll("button[data-action]").forEach(b => b.disabled = v);
@@ -122,11 +164,13 @@
   function render() {
     $("#tab-today").classList.toggle("active", currentList === "today");
     $("#tab-tomorrow").classList.toggle("active", currentList === "tomorrow");
+    updateHeader();
 
     listEl.innerHTML = "";
-    const filtered = items.filter(x => (x.list || "").toLowerCase() === currentList);
+    const tkey = getDateKey();
+    const filtered = items
+      .filter(x => (x.list || "").toLowerCase() === currentList);
 
-    countPill.textContent = `${filtered.length} task(s)`;
 
     if (filtered.length === 0) {
       const empty = document.createElement("li");
@@ -143,44 +187,69 @@
 
       const text = document.createElement("div");
       text.className = "task-text";
-      text.textContent = it.text;
+      text.appendChild(linkifyText(it.text));
+      text.addEventListener("click", async (e) => {
+        if (e.target.closest("a")) return;
+        const isDone = it.doneOn === tkey;
+        try {
+          setBusy(true);
+          setStatus(isDone ? "Unmarking…" : "Marking done…");
+          if (isDone) {
+            await unstrikeTask(it.id);
+          } else {
+            await strikeTask(it.id);
+          }
+          await refresh();
+        } catch (err) {
+          setStatus("Error: " + err.message);
+        } finally {
+          setBusy(false);
+        }
+      });
 
       const actions = document.createElement("div");
       actions.className = "row";
 
       const moveBtn = document.createElement("button");
-      moveBtn.textContent = currentList === "today" ? "→ Tomorrow" : "← Today";
+      moveBtn.className = "arrow-btn";
+      const dir = currentList === "today" ? "right" : "left";
+      moveBtn.dataset.dir = dir;
+      moveBtn.textContent = dir === "right" ? "→" : "←";
       moveBtn.dataset.action = "move";
       moveBtn.onclick = async () => {
         await moveTask(it.id, currentList === "today" ? "tomorrow" : "today");
       };
 
-      const editBtn = document.createElement("button");
-      editBtn.textContent = "Edit";
-      editBtn.dataset.action = "edit";
-      editBtn.onclick = async () => {
-        const next = prompt("Edit task:", it.text);
-        if (next === null) return;
-        const t = next.trim();
-        if (!t) return;
-        await updateTask(it.id, t);
-      };
-
-      const delBtn = document.createElement("button");
-      delBtn.textContent = "Delete";
-      delBtn.className = "danger";
-      delBtn.dataset.action = "delete";
-      delBtn.onclick = async () => {
-        if (!confirm("Delete this task?")) return;
-        await deleteTask(it.id);
-      };
-
       actions.appendChild(moveBtn);
-      actions.appendChild(editBtn);
-      actions.appendChild(delBtn);
+
+      if (editMode) {
+        const editBtn = document.createElement("button");
+        editBtn.textContent = "Edit";
+        editBtn.dataset.action = "edit";
+        editBtn.onclick = async () => {
+          const next = prompt("Edit task:", it.text);
+          if (next === null) return;
+          const t = next.trim();
+          if (!t) return;
+          await updateTask(it.id, t);
+        };
+
+        const delBtn = document.createElement("button");
+        delBtn.textContent = "Delete";
+        delBtn.className = "danger";
+        delBtn.dataset.action = "delete";
+        delBtn.onclick = async () => {
+          if (!confirm("Delete this task?")) return;
+          await deleteTask(it.id);
+        };
+
+        actions.appendChild(editBtn);
+        actions.appendChild(delBtn);
+      }
 
       wrap.appendChild(text);
       wrap.appendChild(actions);
+      wrap.classList.toggle("done", it.doneOn === tkey);
       li.appendChild(wrap);
       listEl.appendChild(li);
     }
@@ -196,7 +265,9 @@
       const out = await apiCall({ action: "list" });
       if (!out.ok) throw new Error(out.error || "Unknown error");
       items = out.items || [];
-      setStatus(`Loaded ${items.length} total task(s) from Sheet.`);
+      await maybeClearDoneOn();
+      setLoadedInfo(`Loaded ${items.length} total task(s) from Sheet.`);
+      setStatus("");
       render();
     } catch (err) {
       setStatus("Error: " + err.message);
@@ -214,6 +285,7 @@
       setBusy(true);
       setStatus("Adding…");
       input.value = "";
+      input.focus();
       const out = await apiCall({ action: "add", text, list: currentList });
       if (!out.ok) throw new Error(out.error || "Add failed");
       await refresh();
@@ -266,25 +338,157 @@
     }
   }
 
+  async function strikeTask(id) {
+    const d = getDateKey();
+    const out = await apiCall({ action: "strike", id, doneOn: d });
+    if (!out.ok) throw new Error(out.error || "Strike failed");
+  }
+
+  async function unstrikeTask(id) {
+    const out = await apiCall({ action: "unstrike", id });
+    if (!out.ok) throw new Error(out.error || "Unstrike failed");
+  }
+
+  function linkifyText(s) {
+    const frag = document.createDocumentFragment();
+    const re = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+    let last = 0;
+    const matches = s.matchAll(re);
+    for (const m of matches) {
+      const i = m.index || 0;
+      if (i > last) frag.appendChild(document.createTextNode(s.slice(last, i)));
+      let href = m[0];
+      if (href.startsWith("www.")) href = "https://" + href;
+      const a = document.createElement("a");
+      a.href = href;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = m[0];
+      a.addEventListener("click", (e) => e.stopPropagation());
+      frag.appendChild(a);
+      last = i + m[0].length;
+    }
+    if (last < s.length) frag.appendChild(document.createTextNode(s.slice(last)));
+    return frag;
+  }
+
+  async function maybeClearDoneOn() {
+    if (!dayChanged) return;
+    const t = getDateKey();
+    const ids = items.filter(x => x.doneOn && x.doneOn !== t).map(x => x.id);
+    if (ids.length === 0) { dayChanged = false; return; }
+    await Promise.all(ids.map(id => unstrikeTask(id)));
+    dayChanged = false;
+    const out = await apiCall({ action: "list" });
+    if (out.ok) items = out.items || [];
+  }
+
+  function setToday() {
+    const d = new Date();
+    const s = d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+    if (datePill) datePill.textContent = s;
+  }
+
+  function updateHeader() {
+    const d = new Date();
+    if (currentList === "tomorrow") d.setDate(d.getDate() + 1);
+    headerDate.textContent = d.toLocaleDateString(undefined, { month: "long", day: "numeric" });
+    toggleToday.classList.toggle("active", currentList === "today");
+    toggleTomorrow.classList.toggle("active", currentList === "tomorrow");
+  }
+
+  function toggleEdit() {
+    editMode = !editMode;
+    editToggle.classList.toggle("active", editMode);
+    editToggle.textContent = editMode ? "done" : "edit";
+    render();
+  }
+
+  function getDateKey() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const da = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${da}`;
+  }
+
+  function switchList(to) {
+    currentList = to === "tomorrow" ? "tomorrow" : "today";
+    try {
+      localStorage.setItem("lastList", currentList);
+      localStorage.setItem("lastDate", getDateKey());
+    } catch {}
+    render();
+  }
+
+  function initDayState() {
+    let startList = "today";
+    try {
+      const lastDate = localStorage.getItem("lastDate");
+      const lastList = localStorage.getItem("lastList");
+      const todayKey = getDateKey();
+      dayChanged = lastDate !== todayKey;
+      if (lastDate === todayKey && (lastList === "today" || lastList === "tomorrow")) {
+        startList = lastList;
+      }
+      localStorage.setItem("lastDate", todayKey);
+      localStorage.setItem("lastList", startList);
+    } catch {}
+    currentList = startList;
+  }
+
   // UI events
-  $("#addBtn").addEventListener("click", addTask);
   $("#newTask").addEventListener("keydown", (e) => {
     if (e.key === "Enter") addTask();
   });
 
-  $("#tab-today").addEventListener("click", () => {
-    currentList = "today";
-    render();
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || busy) return;
+    const input = $("#newTask");
+    if (document.activeElement === input) return;
+    if (!input.value.trim()) return;
+    addTask();
   });
 
-  $("#tab-tomorrow").addEventListener("click", () => {
-    currentList = "tomorrow";
-    render();
-  });
+  $("#tab-today").addEventListener("click", () => { switchList("today"); });
 
-  $("#reloadBtn").addEventListener("click", refresh);
+  $("#tab-tomorrow").addEventListener("click", () => { switchList("tomorrow"); });
+
+  toggleToday.addEventListener("click", () => { switchList("today"); });
+  toggleTomorrow.addEventListener("click", () => { switchList("tomorrow"); });
+
+  editToggle.addEventListener("click", toggleEdit);
+
+
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touching = false;
+  const SWIPE_THRESHOLD = 50;
+  const MAX_VERTICAL_DRIFT = 40;
+
+  document.body.addEventListener("touchstart", (e) => {
+    const t = e.changedTouches[0];
+    touchStartX = t.clientX;
+    touchStartY = t.clientY;
+    touching = true;
+  }, { passive: true });
+
+  document.body.addEventListener("touchend", (e) => {
+    if (!touching) return;
+    touching = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStartX;
+    const dy = t.clientY - touchStartY;
+    if (Math.abs(dy) > MAX_VERTICAL_DRIFT) return;
+    if (Math.abs(dx) < SWIPE_THRESHOLD) return;
+    if (dx < 0 && currentList === "today") { switchList("tomorrow"); }
+    else if (dx > 0 && currentList === "tomorrow") { switchList("today"); }
+  }, { passive: true });
 
   // Start
+  initDayState();
+  setToday();
+  updateHeader();
   refresh();
 </script>
 </body>
