@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>VJC Timetable to ICS</title>
+		<style>
+			@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,600&display=swap");
+
+			:root {
+				--bg-1: #f6f2ea;
+				--bg-2: #e1efe5;
+				--ink: #1a1a16;
+				--muted: #4d4a41;
+				--accent: #0d6b5a;
+				--accent-2: #e08f2f;
+				--card: #ffffff;
+				--border: #d7d1c3;
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			body {
+				margin: 0;
+				color: var(--ink);
+				font-family: "Space Grotesk", "Segoe UI", sans-serif;
+				background: radial-gradient(1200px 600px at 10% -10%, #fef7ea, transparent 60%),
+					radial-gradient(900px 500px at 90% 0%, #dbf1e6, transparent 60%),
+					linear-gradient(180deg, var(--bg-1), var(--bg-2));
+				min-height: 100vh;
+			}
+
+			header {
+				padding: 48px 24px 24px;
+				text-align: center;
+			}
+
+			header h1 {
+				font-family: "Newsreader", serif;
+				font-size: clamp(2.2rem, 4vw, 3.2rem);
+				margin: 0 0 12px;
+				letter-spacing: -0.02em;
+			}
+
+			header p {
+				margin: 0 auto;
+				max-width: 740px;
+				color: var(--muted);
+				font-size: 1.02rem;
+			}
+
+			.grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+				gap: 20px;
+				padding: 24px;
+				max-width: 1100px;
+				margin: 0 auto;
+			}
+
+			.card {
+				background: var(--card);
+				border: 1px solid var(--border);
+				border-radius: 18px;
+				padding: 20px;
+				box-shadow: 0 12px 30px rgba(32, 34, 28, 0.08);
+			}
+
+			.card h2 {
+				margin: 0 0 14px;
+				font-size: 1.1rem;
+			}
+
+			label {
+				display: block;
+				font-size: 0.9rem;
+				color: var(--muted);
+				margin: 14px 0 6px;
+			}
+
+			input[type="file"],
+			input[type="date"],
+			select {
+				width: 100%;
+				padding: 10px 12px;
+				border-radius: 12px;
+				border: 1px solid var(--border);
+				font-family: inherit;
+				font-size: 0.95rem;
+				background: #fffefb;
+			}
+
+			.button-row {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 12px;
+				margin-top: 20px;
+			}
+
+			button {
+				border: none;
+				padding: 12px 18px;
+				border-radius: 999px;
+				font-family: "Space Grotesk", sans-serif;
+				font-weight: 600;
+				font-size: 0.95rem;
+				cursor: pointer;
+				transition: transform 0.2s ease, box-shadow 0.2s ease;
+			}
+
+			button.primary {
+				background: var(--accent);
+				color: white;
+				box-shadow: 0 10px 16px rgba(13, 107, 90, 0.25);
+			}
+
+			button.secondary {
+				background: var(--accent-2);
+				color: #1a1a16;
+				box-shadow: 0 10px 16px rgba(224, 143, 47, 0.25);
+			}
+
+			button:active {
+				transform: translateY(1px);
+			}
+
+			.log {
+				font-size: 0.92rem;
+				color: var(--muted);
+				min-height: 80px;
+				white-space: pre-line;
+			}
+
+			.pill {
+				display: inline-flex;
+				align-items: center;
+				gap: 8px;
+				padding: 6px 12px;
+				border-radius: 999px;
+				background: #f3efe4;
+				color: #3b372f;
+				font-size: 0.85rem;
+			}
+
+			footer {
+				padding: 18px 24px 40px;
+				text-align: center;
+				color: var(--muted);
+				font-size: 0.85rem;
+			}
+
+			.notes {
+				line-height: 1.5;
+			}
+
+			@media (max-width: 720px) {
+				header {
+					text-align: left;
+				}
+
+				.button-row {
+					flex-direction: column;
+					align-items: stretch;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<header>
+			<div class="pill">HTML in, ICS out</div>
+			<h1>VJC Timetable to Calendar</h1>
+			<p>
+				Upload your odd and even week timetable HTML files, choose the calendar window, then
+				export a single .ics file for your calendar app.
+			</p>
+		</header>
+
+		<main class="grid">
+			<section class="card">
+				<h2>1) Upload timetables</h2>
+				<label for="oddFile">Odd week HTML</label>
+				<input id="oddFile" type="file" accept=".html,.htm" />
+
+				<label for="evenFile">Even week HTML</label>
+				<input id="evenFile" type="file" accept=".html,.htm" />
+
+				<div class="notes">
+					<p>
+						Works with the VJC timetable export that contains a <code>var data = {...}</code>
+						block. It also supports simple timetable tables with weekday headers.
+					</p>
+				</div>
+			</section>
+
+			<section class="card">
+				<h2>2) Date window</h2>
+				<label for="startDate">Start date</label>
+				<input id="startDate" type="date" />
+
+				<label for="endDate">End date</label>
+				<input id="endDate" type="date" />
+
+				<label for="firstWeek">First week parity</label>
+				<select id="firstWeek">
+					<option value="odd">Odd</option>
+					<option value="even">Even</option>
+				</select>
+
+				<div class="button-row">
+					<button class="primary" id="generateBtn">Generate .ics</button>
+					<button class="secondary" id="downloadBtn" disabled>Download</button>
+				</div>
+			</section>
+
+			<section class="card">
+				<h2>3) Output</h2>
+				<div class="log" id="log">Waiting for files...</div>
+			</section>
+		</main>
+
+		<footer>
+			The calendar uses the start date as week 1 for odd/even calculations.
+		</footer>
+
+		<script>
+			const oddFileInput = document.getElementById("oddFile");
+			const evenFileInput = document.getElementById("evenFile");
+			const startDateInput = document.getElementById("startDate");
+			const endDateInput = document.getElementById("endDate");
+			const firstWeekSelect = document.getElementById("firstWeek");
+			const logEl = document.getElementById("log");
+			const generateBtn = document.getElementById("generateBtn");
+			const downloadBtn = document.getElementById("downloadBtn");
+
+			let latestIcs = "";
+
+			const dayMap = {
+				mon: 1,
+				monday: 1,
+				tue: 2,
+				tues: 2,
+				tuesday: 2,
+				wed: 3,
+				weds: 3,
+				wednesday: 3,
+				thu: 4,
+				thur: 4,
+				thurs: 4,
+				thursday: 4,
+				fri: 5,
+				friday: 5,
+			};
+
+			function setLog(message) {
+				logEl.textContent = message;
+			}
+
+			function parseTimeRange(raw) {
+				if (!raw) return null;
+				const cleaned = raw.replace(/\s+/g, " ").trim();
+				const match = cleaned.match(
+					/(\d{1,2})(?::?(\d{2}))?\s*(?:-|to|–|—)\s*(\d{1,2})(?::?(\d{2}))?/i
+				);
+				if (!match) return null;
+				const startHour = parseInt(match[1], 10);
+				const startMin = parseInt(match[2] || "0", 10);
+				const endHour = parseInt(match[3], 10);
+				const endMin = parseInt(match[4] || "0", 10);
+				return {
+					start: { hour: startHour, minute: startMin },
+					end: { hour: endHour, minute: endMin },
+				};
+			}
+
+			function normalizeDay(text) {
+				const key = text.toLowerCase().replace(/[^a-z]/g, "");
+				return dayMap[key] || null;
+			}
+
+			function extractDataObject(htmlText) {
+				const marker = "var data";
+				const markerIndex = htmlText.indexOf(marker);
+				if (markerIndex === -1) return null;
+				const braceStart = htmlText.indexOf("{", markerIndex);
+				if (braceStart === -1) return null;
+				let depth = 0;
+				let inString = false;
+				let escapeNext = false;
+				for (let i = braceStart; i < htmlText.length; i += 1) {
+					const ch = htmlText[i];
+					if (escapeNext) {
+						escapeNext = false;
+						continue;
+					}
+					if (ch === "\\") {
+						if (inString) escapeNext = true;
+						continue;
+					}
+					if (ch === '"') {
+						inString = !inString;
+						continue;
+					}
+					if (inString) continue;
+					if (ch === "{") depth += 1;
+					if (ch === "}") depth -= 1;
+					if (depth === 0) {
+						return htmlText.slice(braceStart, i + 1);
+					}
+				}
+				return null;
+			}
+
+			function minutesToTime(raw) {
+				const hour = Math.floor(raw / 100);
+				const minute = raw % 100;
+				return { hour, minute };
+			}
+
+			function parseVjcTimetable(htmlText) {
+				const dataText = extractDataObject(htmlText);
+				if (!dataText) return null;
+				let data;
+				try {
+					data = JSON.parse(dataText);
+				} catch (error) {
+					return null;
+				}
+
+				const student = data.students && data.students[0];
+				if (!student) return null;
+				const lessonsKey = `lessons_${student.value}`;
+				const lessons = data[lessonsKey];
+				if (!Array.isArray(lessons)) return null;
+				const timeslots = Array.isArray(data.timeslots) ? data.timeslots : [];
+				if (!timeslots.length) return null;
+
+				const schedule = {};
+				for (let day = 1; day <= 5; day += 1) schedule[day] = [];
+
+				lessons.forEach((dayBlock) => {
+					const weekday = dayBlock.weekday;
+					if (!schedule[weekday]) schedule[weekday] = [];
+					dayBlock.rows.forEach((row) => {
+						row.lessons.forEach((lesson) => {
+							const startSlot = timeslots[lesson.fromslot - 1];
+							const endSlot = timeslots[lesson.toslot - 1];
+							if (!startSlot || !endSlot) return;
+							const summary = lesson.line1 ? lesson.line1.replace(/_/g, " ") : "Lesson";
+							const location = lesson.line2 ? lesson.line2.replace(/\|/g, ", ") : "";
+							const teacher = lesson.line3 ? lesson.line3.replace(/\|/g, ", ") : "";
+							schedule[weekday].push({
+								summary,
+								location,
+								description: teacher ? `Teacher: ${teacher}` : "",
+								start: minutesToTime(startSlot.start),
+								end: minutesToTime(endSlot.end),
+							});
+						});
+					});
+				});
+
+				return schedule;
+			}
+
+			function parseTimetable(htmlText) {
+				const vjcSchedule = parseVjcTimetable(htmlText);
+				if (vjcSchedule) return vjcSchedule;
+
+				const parser = new DOMParser();
+				const doc = parser.parseFromString(htmlText, "text/html");
+				const tables = Array.from(doc.querySelectorAll("table"));
+				for (const table of tables) {
+					const rows = Array.from(table.querySelectorAll("tr"));
+					if (rows.length < 2) continue;
+					let headerIndex = -1;
+					let dayColumnIndexes = [];
+
+					rows.forEach((row, index) => {
+						const cells = Array.from(row.children).map((cell) => cell.textContent.trim());
+						const dayIndexes = cells
+							.map((cellText, cellIndex) => ({
+								day: normalizeDay(cellText),
+								index: cellIndex,
+							}))
+							.filter((entry) => entry.day);
+						if (dayIndexes.length >= 3 && headerIndex === -1) {
+							headerIndex = index;
+							dayColumnIndexes = dayIndexes;
+						}
+					});
+
+					if (headerIndex === -1) continue;
+
+					const schedule = {};
+					for (const entry of dayColumnIndexes) {
+						schedule[entry.day] = [];
+					}
+
+					for (let r = headerIndex + 1; r < rows.length; r += 1) {
+						const cells = Array.from(rows[r].children);
+						if (!cells.length) continue;
+						const timeText = cells[0].textContent.trim();
+						const timeRange = parseTimeRange(timeText);
+						if (!timeRange) continue;
+
+						for (const entry of dayColumnIndexes) {
+							const cell = cells[entry.index];
+							if (!cell) continue;
+							const cellText = cell.textContent.replace(/\s+/g, " ").trim();
+							if (!cellText) continue;
+							const entries = cellText
+								.split(/\n|;|\s{2,}/)
+								.map((item) => item.trim())
+								.filter(Boolean);
+							for (const summary of entries) {
+								schedule[entry.day].push({
+									summary,
+									start: timeRange.start,
+									end: timeRange.end,
+								});
+							}
+						}
+					}
+
+					return schedule;
+				}
+				throw new Error("No timetable data found. Check the HTML format.");
+			}
+
+			function formatIcsDate(date, time) {
+				const pad = (num) => String(num).padStart(2, "0");
+				const y = date.getFullYear();
+				const m = pad(date.getMonth() + 1);
+				const d = pad(date.getDate());
+				const hh = pad(time.hour);
+				const mm = pad(time.minute);
+				return `${y}${m}${d}T${hh}${mm}00`;
+			}
+
+			function escapeIcs(text) {
+				return String(text)
+					.replace(/\\/g, "\\\\")
+					.replace(/\n/g, "\\n")
+					.replace(/;/g, "\\;")
+					.replace(/,/g, "\\,");
+			}
+
+			function buildIcs(events) {
+				const lines = [
+					"BEGIN:VCALENDAR",
+					"VERSION:2.0",
+					"PRODID:-//VJC Timetable//EN",
+					"CALSCALE:GREGORIAN",
+				];
+				const stamp = new Date();
+				const dtStamp = formatIcsDate(stamp, { hour: stamp.getHours(), minute: stamp.getMinutes() });
+				events.forEach((event, index) => {
+					lines.push("BEGIN:VEVENT");
+					lines.push(`UID:${dtStamp}-${index}@vjctimetable`);
+					lines.push(`DTSTAMP:${dtStamp}`);
+					lines.push(`DTSTART:${event.start}`);
+					lines.push(`DTEND:${event.end}`);
+					lines.push(`SUMMARY:${escapeIcs(event.summary)}`);
+					if (event.location) {
+						lines.push(`LOCATION:${escapeIcs(event.location)}`);
+					}
+					if (event.description) {
+						lines.push(`DESCRIPTION:${escapeIcs(event.description)}`);
+					}
+					lines.push("END:VEVENT");
+				});
+				lines.push("END:VCALENDAR");
+				return lines.join("\r\n");
+			}
+
+			function buildEvents(scheduleOdd, scheduleEven, startDate, endDate, firstParity) {
+				const events = [];
+				const parityForWeek = (weekIndex) => {
+					if (firstParity === "odd") return weekIndex % 2 === 0 ? "odd" : "even";
+					return weekIndex % 2 === 0 ? "even" : "odd";
+				};
+
+				const msPerDay = 24 * 60 * 60 * 1000;
+				for (
+					let current = new Date(startDate);
+					current <= endDate;
+					current = new Date(current.getTime() + msPerDay)
+				) {
+					const day = current.getDay();
+					if (day === 0 || day === 6) continue;
+					const diffDays = Math.floor((current - startDate) / msPerDay);
+					const weekIndex = Math.floor(diffDays / 7);
+					const parity = parityForWeek(weekIndex);
+					const schedule = parity === "odd" ? scheduleOdd : scheduleEven;
+					const dayKey = day === 0 ? 7 : day;
+					const dayEntries = schedule[dayKey] || [];
+					for (const entry of dayEntries) {
+						events.push({
+							summary: entry.summary,
+							location: entry.location,
+							description: entry.description,
+							start: formatIcsDate(current, entry.start),
+							end: formatIcsDate(current, entry.end),
+						});
+					}
+				}
+				return events;
+			}
+
+			async function readFile(file) {
+				return new Promise((resolve, reject) => {
+					const reader = new FileReader();
+					reader.onload = () => resolve(reader.result);
+					reader.onerror = () => reject(reader.error);
+					reader.readAsText(file);
+				});
+			}
+
+			generateBtn.addEventListener("click", async () => {
+				try {
+					if (!oddFileInput.files[0] || !evenFileInput.files[0]) {
+						setLog("Please select both odd and even week HTML files.");
+						return;
+					}
+					if (!startDateInput.value || !endDateInput.value) {
+						setLog("Please select a start and end date.");
+						return;
+					}
+
+					const startDate = new Date(startDateInput.value);
+					const endDate = new Date(endDateInput.value);
+					if (startDate > endDate) {
+						setLog("Start date must be before end date.");
+						return;
+					}
+
+					const [oddText, evenText] = await Promise.all([
+						readFile(oddFileInput.files[0]),
+						readFile(evenFileInput.files[0]),
+					]);
+
+					const scheduleOdd = parseTimetable(oddText);
+					const scheduleEven = parseTimetable(evenText);
+					const events = buildEvents(
+						scheduleOdd,
+						scheduleEven,
+						startDate,
+						endDate,
+						firstWeekSelect.value
+					);
+
+					latestIcs = buildIcs(events);
+					downloadBtn.disabled = false;
+					setLog(`Generated ${events.length} events. Ready to download.`);
+				} catch (error) {
+					setLog(error.message || "Something went wrong while parsing.");
+				}
+			});
+
+			downloadBtn.addEventListener("click", () => {
+				if (!latestIcs) return;
+				const blob = new Blob([latestIcs], { type: "text/calendar" });
+				const url = URL.createObjectURL(blob);
+				const link = document.createElement("a");
+				link.href = url;
+				link.download = "vjc-timetable.ics";
+				link.click();
+				URL.revokeObjectURL(url);
+			});
+		</script>
+	</body>
+</html>
