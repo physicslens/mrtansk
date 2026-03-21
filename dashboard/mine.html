@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Leaflet with MapTiler for high-quality maps -->
+    <!-- Firebase App (the core Firebase SDK) is always required and must be listed first -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+
+    <style>
+        :root {
+            --bg: #f5f5f7;
+            --card-bg: #ffffff;
+            --text: #1d1d1f;
+            --accent: #0071e3;
+            --border: #d2d2d7;
+            --spacing: 16px;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: var(--spacing);
+        }
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: var(--spacing);
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: var(--spacing);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+        .card h2 {
+            margin-top: 0;
+            font-size: 1.2rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .weather-info, .traffic-info {
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+        .calendar-grid {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--spacing);
+        }
+        iframe {
+            border: none;
+            width: 100%;
+            height: 500px;
+            border-radius: 8px;
+        }
+        .traffic-item {
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 0.9rem;
+        }
+        .traffic-item.slow { color: #ff9500; font-weight: 500; }
+        .traffic-item.very-slow { color: #ff3b30; font-weight: 600; }
+        .todo-item { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; margin-bottom: 8px; }
+        .todo-item.completed { text-decoration: line-through; color: var(--muted); }
+        .todo-input { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 10px; font-size: 0.85rem; }
+        .todo-list-container { max-height: 250px; overflow-y: auto; }
+        
+        .badge.slow { background: #ff9500; color: white; }
+        .badge.heavy { background: #ff3b30; color: white; }
+        .high-inc { color: #d70015; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <header style="text-align: center; margin-bottom: 24px;">
+        <h1>My Dashboard</h1>
+        <p id="current-time"></p>
+    </header>
+
+    <div class="container-fluid">
+        <div class="row g-3">
+            <!-- Column 1: Weather & AQI (.col-md-4) -->
+            <div class="col-md-4">
+                <div class="card h-100" id="weather-card">
+                    <h2>Singapore Weather <span id="weather-time" class="badge">Loading...</span></h2>
+                    <div id="weather-content" class="weather-info">
+                        Fetching latest data...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Column 2: News & COE (.col-md-4) -->
+            <div class="col-md-4">
+                <div class="card h-100" id="news-card">
+                    <h2>Latest News <span id="news-status" class="badge">RSS</span></h2>
+                    <div id="news-content" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
+                        <div>
+                            <div style="font-weight: 700; color: var(--muted); font-size: 0.8rem; text-transform: uppercase; margin-bottom: 8px;">Singapore</div>
+                            <div id="news-sg-content" style="display: flex; flex-direction: column; gap: 10px;"></div>
+                        </div>
+                        <div>
+                            <div style="font-weight: 700; color: var(--muted); font-size: 0.8rem; text-transform: uppercase; margin-bottom: 8px;">Global</div>
+                            <div id="news-global-content" style="display: flex; flex-direction: column; gap: 10px;"></div>
+                        </div>
+                    </div>
+                    <div id="coe-content" class="weather-info" style="margin-top: 15px; padding-top: 10px; border-top: 1px dashed var(--border);">
+                        Fetching COE prices...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Column 3: Family To-Do (.col-md-4) -->
+            <div class="col-md-4">
+                <div class="card h-100" id="todo-card">
+                    <h2>Family To-Do <span id="todo-sync" class="badge">Google Tasks</span></h2>
+                    <div class="input-group mb-2 mt-2">
+                        <input type="text" id="new-todo-text" class="form-control form-control-sm" placeholder="Add new task...">
+                        <button class="btn btn-primary btn-sm" onclick="addDashboardTodo()">Add</button>
+                    </div>
+                    <div id="dashboardTodoList" class="todo-list-container" style="padding: 10px 0;">
+                        Loading Google Tasks...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Timetable Section (Reordered: Term 2, Wife, Son, Daughter) -->
+        <div class="row g-3 mt-3">
+            <div class="col-md-3">
+                <div class="card h-100" style="margin: 0;">
+                    <h2>Term 2 Timetable</h2>
+                    <iframe src="https://calendar.google.com/calendar/embed?height=300&wkst=1&bgcolor=%23ffffff&ctz=Asia%2FSingapore&mode=AGENDA&showTitle=0&showNav=1&showTabs=1&showCalendars=0&src=c_3ec79e95ad83547b70e5c8ffba23b8717a13d842b67e84ff5db9c26a45d8edff%40group.calendar.google.com&color=%23F4511E" style="height: 300px;"></iframe>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card h-100" style="margin: 0;">
+                    <h2>Wife's Timetable</h2>
+                    <iframe src="https://calendar.google.com/calendar/embed?height=300&wkst=1&bgcolor=%23ffffff&ctz=Asia%2FSingapore&mode=AGENDA&showTitle=0&showNav=1&showTabs=1&showCalendars=0&src=c_f0de1cb58822cd76e8f1a6b4c3733ce4baa298c3e919ccf5d0c0f2b6caf92822%40group.calendar.google.com&color=%23039BE5" style="height: 300px;"></iframe>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card h-100" style="margin: 0;">
+                    <h2>Son's Timetable</h2>
+                    <iframe src="https://calendar.google.com/calendar/embed?height=300&wkst=1&bgcolor=%23ffffff&ctz=Asia%2FSingapore&mode=AGENDA&showTitle=0&showNav=1&showPrint=0&showTabs=1&showCalendars=0&showTz=1&src=c_645efca2b21b422fd4ab5b242965ac6e0e5608be0889ccba57b9499b7786ed8c%40group.calendar.google.com&color=%237986CB" style="height: 300px;"></iframe>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card h-100" style="margin: 0;">
+                    <h2>Daughter's Timetable</h2>
+                    <iframe src="https://calendar.google.com/calendar/embed?height=300&wkst=1&bgcolor=%23ffffff&ctz=Asia%2FSingapore&mode=AGENDA&showTitle=0&showNav=1&showTabs=1&showCalendars=0&src=c_8dac8d91cf07e5532502ade12f33e3f173e73c28fb0442ff66d358cbcd4eae50%40group.calendar.google.com&color=%2333B679" style="height: 300px;"></iframe>
+                </div>
+            </div>
+        </div>
+
+        <!-- Running Tracker Section -->
+        <div class="row g-3 mt-3">
+            <div class="col-12">
+                <div class="card">
+                    <h2>Running Tracker <span id="run-status" class="badge bg-secondary">Offline</span></h2>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <form id="run-form" class="p-2">
+                                <div class="mb-3">
+                                    <label for="run-date" class="form-label">Date</label>
+                                    <input type="date" id="run-date" class="form-control" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="run-dist" class="form-label">Distance (km)</label>
+                                    <input type="number" id="run-dist" class="form-control" step="0.01" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="run-dur" class="form-label">Duration (min)</label>
+                                    <input type="number" id="run-dur" class="form-control" step="1" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">Log Run</button>
+                            </form>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                                <table class="table table-sm table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Dist (km)</th>
+                                            <th>Dur (min)</th>
+                                            <th>Pace (min/km)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="run-history">
+                                        <tr><td colspan="4" class="text-center text-muted">No runs logged yet.</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Update Time
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('current-time').innerText = now.toLocaleString('en-SG', { 
+                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+
+        // Fetch weather and air quality (Integrated with Open-Meteo for local Tampines)
+        async function fetchWeather() {
+            try {
+                // Open-Meteo for Precise Tampines Weather (Lat: 1.3521, Lon: 103.9447)
+                const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=1.3521&longitude=103.9447&current=temperature_2m,relative_humidity_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Asia%2FSingapore`;
+                const weatherRes = await fetch(weatherUrl);
+                const weatherData = await weatherRes.json();
+
+                // Fetch AQICN for AQI and PM2.5 ONLY (Singapore East ID: 1664)
+                const aqiRes = await fetch('https://api.waqi.info/feed/@1664/?token=demo');
+                const aqiData = await aqiRes.json();
+
+                if (weatherData.current && aqiData.status === 'ok') {
+                    const current = weatherData.current;
+                    const daily = weatherData.daily;
+                    
+                    // Weather Code Mapping (Simple)
+                    const weatherCodes = {
+                        0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
+                        45: 'Foggy', 48: 'Foggy', 51: 'Drizzle', 61: 'Rain', 80: 'Rain showers',
+                        95: 'Thunderstorm'
+                    };
+                    const forecastText = weatherCodes[current.weather_code] || 'Cloudy';
+                    
+                    const temp = current.temperature_2m;
+                    const humid = current.relative_humidity_2m;
+                    const maxTemp = daily.temperature_2m_max[0];
+                    const minTemp = daily.temperature_2m_min[0];
+
+                    const aqi = aqiData.data.aqi;
+                    const pm25 = aqiData.data.iaqi.pm25 ? aqiData.data.iaqi.pm25.v : '--';
+                    
+                    let status = "Healthy";
+                    let color = "#34c759";
+                    if (aqi > 50) { status = "Moderate"; color = "#ff9500"; }
+                    if (aqi > 100) { status = "Unhealthy"; color = "#ff3b30"; }
+
+                    document.getElementById('weather-content').innerHTML = `
+                        <div style="font-size: 2.2rem; font-weight: 700; margin-bottom: 5px;">${forecastText}</div>
+                        <div style="font-size: 1rem; color: var(--muted); margin-bottom: 15px;">Area: Tampines (Local Station)</div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+                            <div style="background: rgba(0,0,0,0.03); padding: 10px; border-radius: 8px; text-align: center;">
+                                <div style="color: var(--muted); font-size: 0.75rem; text-transform: uppercase; margin-bottom: 5px;">AQI (East)</div>
+                                <div style="font-size: 1.4rem; font-weight: 700; color: ${color};">${aqi}</div>
+                                <div style="font-size: 0.7rem; font-weight: 600; color: ${color};">${status}</div>
+                            </div>
+                            <div style="background: rgba(0,0,0,0.03); padding: 10px; border-radius: 8px; text-align: center;">
+                                <div style="color: var(--muted); font-size: 0.75rem; text-transform: uppercase; margin-bottom: 5px;">PM2.5</div>
+                                <div style="font-size: 1.4rem; font-weight: 700;">${pm25}</div>
+                                <div style="font-size: 0.7rem; color: var(--muted);">&mu;g/m&sup3;</div>
+                            </div>
+                            <div style="background: rgba(0,0,0,0.03); padding: 10px; border-radius: 8px; text-align: center;">
+                                <div style="color: var(--muted); font-size: 0.75rem; text-transform: uppercase; margin-bottom: 5px;">Temp</div>
+                                <div style="font-size: 1.4rem; font-weight: 700;">${temp}&deg;C</div>
+                                <div style="font-size: 0.7rem; color: var(--muted);">${minTemp}&deg; - ${maxTemp}&deg;</div>
+                            </div>
+                            <div style="background: rgba(0,0,0,0.03); padding: 10px; border-radius: 8px; text-align: center;">
+                                <div style="color: var(--muted); font-size: 0.75rem; text-transform: uppercase; margin-bottom: 5px;">Humidity</div>
+                                <div style="font-size: 1.4rem; font-weight: 700;">${humid}%</div>
+                                <div style="font-size: 0.7rem; color: var(--muted);">Real-time</div>
+                            </div>
+                        </div>
+                    `;
+                    document.getElementById('weather-time').innerText = new Date().toLocaleTimeString();
+                }
+            } catch (error) {
+                document.getElementById('weather-content').innerHTML = "Unable to load data.";
+            }
+        }
+
+        async function fetchCOE() {
+            try {
+                const dataset_id = "d_69b3380ad7e51aff3a7dcc84eba52b8a";
+                const url = `https://data.gov.sg/api/action/datastore_search?resource_id=${dataset_id}&sort=month desc, bidding_no desc`;
+                
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (result.success && result.result && result.result.records) {
+                    const records = result.result.records;
+                    
+                    // Filter for Category A and get the latest 3
+                    const catARecords = records
+                        .filter(r => r.vehicle_class === 'Category A')
+                        .slice(0, 3);
+
+                    let coeHtml = `
+                        <div style="font-weight: 600; color: var(--muted); margin-bottom: 8px; border-bottom: 1px dotted var(--border); padding-bottom: 5px;">COE Cat A Prices (Official)</div>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                    `;
+
+                    catARecords.forEach((record, index) => {
+                        const premium = parseFloat(record.premium);
+                        const nextRecord = catARecords[index + 1];
+                        let status = 'even';
+                        
+                        if (nextRecord) {
+                            const nextPremium = parseFloat(nextRecord.premium);
+                            if (premium > nextPremium) status = 'up';
+                            else if (premium < nextPremium) status = 'down';
+                        }
+                        
+                        const color = status === 'up' ? '#ff3b30' : (status === 'down' ? '#34c759' : '#0071e3');
+                        let arrow = '&#9147;';
+                        if (status === 'up') arrow = '&#9650;';
+                        if (status === 'down') arrow = '&#9660;';
+                        
+                        const formattedPrice = new Intl.NumberFormat('en-SG', { 
+                            style: 'currency', 
+                            currency: 'SGD', 
+                            maximumFractionDigits: 0 
+                        }).format(premium);
+                        
+                        // Parse month (usually YYYY-MM)
+                        const dateParts = record.month.split('-');
+                        const dateObj = new Date(dateParts[0], dateParts[1] - 1);
+                        const displayMonth = dateObj.toLocaleDateString('en-SG', { month: 'short', year: 'numeric' });
+
+                        coeHtml += `
+                            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem;">
+                                <span style="color: var(--muted);">${displayMonth} R${record.bidding_no}</span>
+                                <span style="font-weight: 700; color: ${color};">${formattedPrice} ${arrow}</span>
+                            </div>
+                        `;
+                    });
+                    coeHtml += `</div>`;
+                    document.getElementById('coe-content').innerHTML = coeHtml;
+                }
+            } catch (error) {
+                document.getElementById('coe-content').innerHTML = "COE data (Official API) unavailable.";
+            }
+        }
+
+        // Fetch Top 3 News Headlines (SG and Global together)
+        const NEWS_FEEDS = {
+            sg: 'https://www.channelnewsasia.com/api/v1/rss-outbound-feed?_format=xml&category=10416',
+            global: 'https://feeds.bbci.co.uk/news/world/rss.xml',
+            st: 'https://www.straitstimes.com/news/singapore/rss.xml'
+        };
+
+        async function fetchNews() {
+            try {
+                // Try CNA first (Stable), then ST if CNA fails or for more variety
+                const [sgRes, globalRes, stRes] = await Promise.allSettled([
+                    fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(NEWS_FEEDS.sg)}`),
+                    fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(NEWS_FEEDS.global)}`),
+                    fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(NEWS_FEEDS.st)}`)
+                ]);
+
+                const parser = new DOMParser();
+
+                const getHeadlinesHtml = (contents, count = 3) => {
+                    if (!contents) return '';
+                    try {
+                        let xml = contents;
+                        // Some proxies return the raw XML as a string inside a JSON's 'contents' property
+                        const xmlDoc = parser.parseFromString(xml, "text/xml");
+                        
+                        // Check for parser errors (sometimes AllOrigins returns HTML errors as XML)
+                        if (xmlDoc.querySelector('parsererror')) {
+                            console.error("XML Parse Error");
+                            return '';
+                        }
+
+                        const items = Array.from(xmlDoc.querySelectorAll("item")).slice(0, count);
+                        if (items.length === 0) return '';
+
+                        return items.map(item => {
+                            const title = item.querySelector("title")?.textContent || "No Title";
+                            const link = item.querySelector("link")?.textContent || "#";
+                            return `
+                                <a href="${link}" target="_blank" style="text-decoration: none; color: inherit; padding: 8px; background: rgba(0,0,0,0.02); border-radius: 6px; border-left: 2px solid #0071e3; font-size: 0.85rem; display: block;">
+                                    <div style="font-weight: 600; line-height: 1.3;">${title}</div>
+                                </a>
+                            `;
+                        }).join('');
+                    } catch (e) {
+                        console.error("Error parsing headlines:", e);
+                        return '';
+                    }
+                };
+
+                // Singapore News Logic
+                let sgHtml = "";
+                
+                // Process CNA
+                if (sgRes.status === 'fulfilled' && sgRes.value.ok) {
+                    try {
+                        const data = await sgRes.value.json();
+                        if (data.contents) {
+                            sgHtml += getHeadlinesHtml(data.contents, 2);
+                        }
+                    } catch (e) { console.error("CNA data error:", e); }
+                }
+
+                // Process ST (Fallback/Supplement)
+                if (stRes.status === 'fulfilled' && stRes.value.ok) {
+                    try {
+                        const data = await stRes.value.json();
+                        if (data.contents) {
+                            sgHtml += getHeadlinesHtml(data.contents, 1);
+                        }
+                    } catch (e) { console.error("ST data error:", e); }
+                }
+
+                // If both AllOrigins calls failed, try a direct fetch as a last resort 
+                // (Some browsers allow this if headers are loose)
+                if (!sgHtml) {
+                    try {
+                        const directRes = await fetch(NEWS_FEEDS.sg);
+                        if (directRes.ok) {
+                            const text = await directRes.text();
+                            sgHtml = getHeadlinesHtml(text, 3);
+                        }
+                    } catch (e) { console.warn("Direct fetch failed, but that is expected due to CORS."); }
+                }
+                
+                if (!sgHtml) sgHtml = '<div style="color: var(--muted); font-size: 0.8rem;">Singapore headlines currently unavailable.</div>';
+                document.getElementById('news-sg-content').innerHTML = sgHtml;
+
+                // Global News logic
+                if (globalRes.status === 'fulfilled' && globalRes.value.ok) {
+                    try {
+                        const data = await globalRes.value.json();
+                        if (data && data.contents) {
+                            document.getElementById('news-global-content').innerHTML = getHeadlinesHtml(data.contents, 3);
+                        }
+                    } catch (e) { console.error("BBC data error:", e); }
+                }
+
+                if (!document.getElementById('news-global-content').innerHTML) {
+                    document.getElementById('news-global-content').innerHTML = '<div style="color: var(--muted); font-size: 0.8rem;">Global headlines currently unavailable.</div>';
+                }
+
+                document.getElementById('news-status').innerText = "Updated " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            } catch (error) {
+                console.error("News fetch error:", error);
+            }
+        }
+
+        fetchNews();
+
+        // Dashboard To-Do Sync Logic
+        const TODO_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwNuz8c6u1hQPRMLgO111V2WXGwImtbXY4ncRLBG-PwbO1bgrJA_VMfqmgCQoYADUL8/exec';
+        let dashboardTodos = [];
+
+        async function loadDashboardTodos() {
+            try {
+                const res = await fetch(TODO_SCRIPT_URL);
+                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                
+                const data = await res.json();
+                
+                if (!Array.isArray(data)) {
+                    throw new Error("Invalid data format");
+                }
+
+                dashboardTodos = data;
+                renderDashboardTodos();
+                const syncBadge = document.getElementById('todo-sync');
+                syncBadge.innerText = 'Google Tasks';
+                syncBadge.style.background = '#0071e3';
+            } catch (e) {
+                console.error("Failed to load tasks:", e);
+                document.getElementById('dashboardTodoList').innerHTML = `
+                    <div style="color: #ff3b30; font-size: 0.8rem; padding: 10px; background: rgba(255,59,48,0.05); border-radius: 6px; border: 1px solid rgba(255,59,48,0.2);">
+                        <strong>Sync Error:</strong><br>
+                        ${e.message === 'Unexpected token \'<\', "<!DOCTYPE "...' ? 'Apps Script session expired or URL invalid.' : e.message}<br>
+                        <small>Please re-deploy your Google Apps Script and update the URL.</small>
+                    </div>
+                `;
+                document.getElementById('todo-sync').innerText = 'Sync Error';
+                document.getElementById('todo-sync').style.background = '#ff3b30';
+            }
+        }
+
+        loadDashboardTodos(); // Initial load
+
+        // Unified 15-minute update interval for all live data
+        const UPDATE_INTERVAL = 15 * 60 * 1000; 
+        setInterval(() => {
+            fetchWeather();
+            fetchCOE();
+            fetchNews();
+            loadDashboardTodos();
+        }, UPDATE_INTERVAL);
+
+        function renderDashboardTodos() {
+            const list = document.getElementById('dashboardTodoList');
+            list.innerHTML = '';
+            dashboardTodos.forEach((todo, index) => {
+                const div = document.createElement('div');
+                div.className = `todo-item ${todo.completed ? 'completed' : ''}`;
+                div.innerHTML = `
+                    <input type="checkbox" ${todo.completed ? 'checked' : ''} onclick="toggleDashboardTodo('${todo.id}', ${!todo.completed})">
+                    <span>${todo.text}</span>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        async function toggleDashboardTodo(id, completed) {
+            const syncBadge = document.getElementById('todo-sync');
+            syncBadge.innerText = 'Syncing...';
+            try {
+                await fetch(TODO_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: JSON.stringify({ action: 'toggle', id: id, completed: completed })
+                });
+                // Optimistic UI update
+                const todo = dashboardTodos.find(t => t.id === id);
+                if (todo) todo.completed = completed;
+                renderDashboardTodos();
+                
+                // Refresh from server after a short delay to ensure Google Task API has processed
+                setTimeout(loadDashboardTodos, 2000);
+            } catch (e) {
+                console.error("Toggle failed:", e);
+                loadDashboardTodos(); // Revert on failure
+            }
+        }
+
+        async function addDashboardTodo() {
+            const input = document.getElementById('new-todo-text');
+            const text = input.value.trim();
+            if (!text) return;
+
+            const syncBadge = document.getElementById('todo-sync');
+            syncBadge.innerText = 'Adding...';
+            input.disabled = true;
+
+            try {
+                await fetch(TODO_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: JSON.stringify({ action: 'add', text: text })
+                });
+                
+                input.value = '';
+                input.disabled = false;
+                // Refresh from server to see the new task (with its real ID)
+                setTimeout(loadDashboardTodos, 1500);
+            } catch (e) {
+                console.error("Add failed:", e);
+                input.disabled = false;
+                syncBadge.innerText = 'Error';
+            }
+        }
+
+        fetchWeather();
+        fetchCOE();
+
+        // --- Firebase Configuration ---
+        // TODO: Replace with your project's Firebase configuration
+        const firebaseConfig = {
+          apiKey: "AIzaSyB6lMGTpywnNwHKosDPAgjqWe4-cEuOuTI",
+          authDomain: "fitness-91f42.firebaseapp.com",
+          projectId: "fitness-91f42",
+          storageBucket: "fitness-91f42.firebasestorage.app",
+          messagingSenderId: "50700529862",
+          appId: "1:50700529862:web:c2590ce23405ca9d4327c7",
+          databaseURL: "https://fitness-91f42-default-rtdb.asia-southeast1.firebasedatabase.app"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // --- NEW: REST API Fallback Logic ---
+        const DB_BASE_URL = "https://fitness-91f42-default-rtdb.asia-southeast1.firebasedatabase.app/runs.json";
+
+        async function saveRunREST(data) {
+            try {
+                const response = await fetch(DB_BASE_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(data)
+                });
+                return response.ok;
+            } catch (e) {
+                console.error("REST Save Error:", e);
+                return false;
+            }
+        }
+
+        async function loadRunsREST() {
+            try {
+                const response = await fetch(DB_BASE_URL);
+                const data = await response.json();
+                return data;
+            } catch (e) {
+                console.error("REST Load Error:", e);
+                return null;
+            }
+        }
+
+        // Save a new run
+        async function saveRun(event) {
+            event.preventDefault();
+            console.log("Attempting to save run...");
+            
+            // Fixed: Referencing the correct form input IDs from HTML (run-date, run-dist, run-dur)
+            const date = document.getElementById('run-date').value;
+            const distanceInput = document.getElementById('run-dist');
+            const durationInput = document.getElementById('run-dur');
+
+            if (!date || !distanceInput || !durationInput) {
+                console.error("Could not find form elements by ID");
+                return;
+            }
+
+            const distance = parseFloat(distanceInput.value);
+            const duration = parseFloat(durationInput.value);
+
+            if (!date || isNaN(distance) || isNaN(duration) || distance <= 0) {
+                alert('Please enter valid data');
+                return;
+            }
+
+            const pace = (duration / distance).toFixed(2);
+            const runData = { date, distance, duration, pace };
+
+            try {
+                // Try REST API first as it's often more reliable on strict restrictive networks
+                console.log("Trying REST POST to Firebase...");
+                const success = await saveRunREST(runData);
+                if (success) {
+                    console.log("REST Save Success!");
+                    document.getElementById('run-form').reset();
+                    document.getElementById('run-date').valueAsDate = new Date();
+                    // Update connection badge
+                    document.getElementById('run-status').innerText = 'Online (REST)';
+                    document.getElementById('run-status').className = 'badge bg-success';
+                    // Manually trigger a UI refresh since REST isn't "real-time" like the SDK
+                    setTimeout(() => { window.location.reload(); }, 500);
+                    return;
+                }
+                throw new Error("REST API failed");
+            } catch (restError) {
+                console.warn("REST fallback failed, trying SDK...", restError);
+                // Fallback to SDK if REST fails
+                const newRunRef = database.ref('runs').push();
+                try {
+                    await newRunRef.set(runData);
+                    console.log("SDK Save Success!");
+                    document.getElementById('run-form').reset();
+                    document.getElementById('run-date').valueAsDate = new Date();
+                } catch (sdkError) {
+                    console.error("All sync methods failed:", sdkError);
+                    alert("Sync Failed: " + sdkError.message);
+                }
+            }
+        }
+
+        // Load runs and listen for updates
+        function loadRuns() {
+            console.log("Starting Firebase listener...");
+            const historyTable = document.getElementById('run-history');
+            
+            const runsRef = database.ref('runs');
+            
+            runsRef.orderByChild('date').limitToLast(10).on('value', (snapshot) => {
+                console.log("Firebase data received:", snapshot.val());
+                
+                // Update Badge to Online
+                const statusBadge = document.getElementById('run-status');
+                if (statusBadge) {
+                    statusBadge.innerText = 'Online (Live)';
+                    statusBadge.className = 'badge bg-success';
+                }
+
+                historyTable.innerHTML = '';
+                const runs = [];
+                snapshot.forEach((childSnapshot) => {
+                    runs.push({ id: childSnapshot.key, ...childSnapshot.val() });
+                });
+                
+                if (runs.length === 0) {
+                    historyTable.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No runs found in database.</td></tr>';
+                    return;
+                }
+
+                // Show latest first
+                runs.reverse().forEach(run => {
+                    const row = `
+                        <tr>
+                            <td>${run.date}</td>
+                            <td>${run.distance} km</td>
+                            <td>${run.duration} min</td>
+                            <td>${run.pace} min/km</td>
+                        </tr>
+                    `;
+                    historyTable.innerHTML += row;
+                });
+            }, (error) => {
+                console.error("Firebase Listener Error:", error);
+                historyTable.innerHTML = `<tr><td colspan="4" class="text-danger">Offline: ${error.message}</td></tr>`;
+            });
+        }
+
+        document.getElementById('run-form').addEventListener('submit', saveRun);
+        document.getElementById('run-date').valueAsDate = new Date();
+        loadRuns();
+    </script>
+</body>
+</html>
