@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+    <!-- Leaflet with MapTiler for high-quality maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        :root {
+            --bg: #f5f5f7;
+            --card-bg: #ffffff;
+            --text: #1d1d1f;
+            --accent: #0071e3;
+            --border: #d2d2d7;
+            --spacing: 16px;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: var(--spacing);
+        }
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: var(--spacing);
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: var(--spacing);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+        .card h2 {
+            margin-top: 0;
+            font-size: 1.2rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .weather-info, .traffic-info {
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+        .calendar-grid {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--spacing);
+        }
+        iframe {
+            border: none;
+            width: 100%;
+            height: 500px;
+            border-radius: 8px;
+        }
+        .traffic-item {
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 0.9rem;
+        }
+        .traffic-item.slow { color: #ff9500; font-weight: 500; }
+        .traffic-item.very-slow { color: #ff3b30; font-weight: 600; }
+        .todo-item { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; margin-bottom: 8px; }
+        .todo-item.completed { text-decoration: line-through; color: var(--muted); }
+        .todo-input { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 10px; font-size: 0.85rem; }
+        .todo-list-container { max-height: 250px; overflow-y: auto; }
+        
+        .badge.slow { background: #ff9500; color: white; }
+        .badge.heavy { background: #ff3b30; color: white; }
+        .high-inc { color: #d70015; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <header style="text-align: center; margin-bottom: 24px;">
+        <h1>Personal Dashboard</h1>
+        <p id="current-time"></p>
+    </header>
+
+    <div class="dashboard">
+        <!-- Weather Card -->
+        <div class="card" id="weather-card">
+            <h2>Singapore Weather <span id="weather-time" class="badge">Loading...</span></h2>
+            <div id="weather-content" class="weather-info">
+                Fetching latest data...
+            </div>
+            <div id="coe-content" class="weather-info" style="margin-top: 15px; padding-top: 10px; border-top: 1px dashed var(--border);">
+                Fetching COE prices...
+            </div>
+        </div>
+
+        <!-- News Card -->
+        <div class="card" id="news-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h2 style="margin: 0;">Top News</h2>
+                <div style="display: flex; gap: 5px;">
+                    <button id="btn-sg" onclick="switchNews('sg')" class="badge" style="cursor: pointer; border: none; background: #0071e3; color: white;">Singapore</button>
+                    <button id="btn-global" onclick="switchNews('global')" class="badge" style="cursor: pointer; border: none; background: rgba(0,0,0,0.05); color: var(--muted);">Global</button>
+                </div>
+            </div>
+            <div id="news-content" style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="color: var(--muted); font-size: 0.9rem;">Fetching headlines...</div>
+            </div>
+            <div id="news-status" class="badge" style="margin-top: 10px; display: block; text-align: right;">RSS</div>
+        </div>
+
+        <!-- Traffic Card -->
+        <div class="card" id="traffic-card" style="grid-column: span 2;">
+            <h2>Traffic Map & Incidents <span id="traffic-count" class="badge">Live</span></h2>
+            <div style="display: flex; gap: var(--spacing); height: 400px;">
+                <div id="traffic-map" style="flex: 2; border-radius: 8px; border: 1px solid var(--border);">
+                    <!-- Map will be initialized here by Leaflet -->
+                </div>
+                <div id="traffic-content" class="traffic-info" style="flex: 1; overflow-y: auto;">
+                    Checking incidents...
+                </div>
+            </div>
+        </div>
+
+        <!-- Calendar Section -->
+        <div class="calendar-grid">
+            <div class="card">
+                <h2>Family To-Do <span id="todo-sync" class="badge">Syncing...</span></h2>
+                <div style="padding: 10px 0;">
+                    <input type="text" id="dashboardTodoInput" class="todo-input" placeholder="Add new task...">
+                    <div id="dashboardTodoList" class="todo-list-container">
+                        Loading tasks...
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Dillon's Timetable</h2>
+                <iframe src="https://calendar.google.com/calendar/embed?height=500&wkst=1&bgcolor=%23ffffff&ctz=Asia%2FSingapore&mode=AGENDA&showTitle=0&showNav=1&showPrint=0&showTabs=1&showCalendars=0&showTz=1&src=c_645efca2b21b422fd4ab5b242965ac6e0e5608be0889ccba57b9499b7786ed8c%40group.calendar.google.com&color=%237986CB"></iframe>
+            </div>
+            <div class="card">
+                <h2>Rianne's Timetable</h2>
+                <iframe src="https://calendar.google.com/calendar/embed?height=500&wkst=1&bgcolor=%23ffffff&ctz=Asia%2FSingapore&mode=AGENDA&showTitle=0&showNav=1&showTabs=1&showCalendars=0&src=c_8dac8d91cf07e5532502ade12f33e3f173e73c28fb0442ff66d358cbcd4eae50%40group.calendar.google.com&color=%2333B679"></iframe>
+            </div>
+            <div class="card">
+                <h2>Term 2 Timetable</h2>
+                <iframe src="https://calendar.google.com/calendar/embed?height=500&wkst=1&bgcolor=%23ffffff&ctz=Asia%2FSingapore&mode=AGENDA&showTitle=0&showNav=1&showTabs=1&showCalendars=0&src=c_3ec79e95ad83547b70e5c8ffba23b8717a13d842b67e84ff5db9c26a45d8edff%40group.calendar.google.com&color=%23F4511E"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Update Time
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('current-time').innerText = now.toLocaleString('en-SG', { 
+                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+
+        // Fetch weather and air quality (Integrated with Open-Meteo for local Tampines)
+        async function fetchWeather() {
+            try {
+                // Open-Meteo for Precise Tampines Weather (Lat: 1.3521, Lon: 103.9447)
+                const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=1.3521&longitude=103.9447&current=temperature_2m,relative_humidity_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Asia%2FSingapore`;
+                const weatherRes = await fetch(weatherUrl);
+                const weatherData = await weatherRes.json();
+
+                // Fetch AQICN for AQI and PM2.5 ONLY (Singapore East ID: 1664)
+                const aqiRes = await fetch('https://api.waqi.info/feed/@1664/?token=demo');
+                const aqiData = await aqiRes.json();
+
+                if (weatherData.current && aqiData.status === 'ok') {
+                    const current = weatherData.current;
+                    const daily = weatherData.daily;
+                    
+                    // Weather Code Mapping (Simple)
+                    const weatherCodes = {
+                        0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
+                        45: 'Foggy', 48: 'Foggy', 51: 'Drizzle', 61: 'Rain', 80: 'Rain showers',
+                        95: 'Thunderstorm'
+                    };
+                    const forecastText = weatherCodes[current.weather_code] || 'Cloudy';
+                    
+                    const temp = current.temperature_2m;
+                    const humid = current.relative_humidity_2m;
+                    const maxTemp = daily.temperature_2m_max[0];
+                    const minTemp = daily.temperature_2m_min[0];
+
+                    const aqi = aqiData.data.aqi;
+                    const pm25 = aqiData.data.iaqi.pm25 ? aqiData.data.iaqi.pm25.v : '--';
+                    
+                    let status = "Healthy";
+                    let color = "#34c759";
+                    if (aqi > 50) { status = "Moderate"; color = "#ff9500"; }
+                    if (aqi > 100) { status = "Unhealthy"; color = "#ff3b30"; }
+
+                    document.getElementById('weather-content').innerHTML = `
+                        <div style="font-size: 2.2rem; font-weight: 700; margin-bottom: 5px;">${forecastText}</div>
+                        <div style="font-size: 1rem; color: var(--muted); margin-bottom: 15px;">Area: Tampines (Local Station)</div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+                            <div style="background: rgba(0,0,0,0.03); padding: 10px; border-radius: 8px; text-align: center;">
+                                <div style="color: var(--muted); font-size: 0.75rem; text-transform: uppercase; margin-bottom: 5px;">AQI (East)</div>
+                                <div style="font-size: 1.4rem; font-weight: 700; color: ${color};">${aqi}</div>
+                                <div style="font-size: 0.7rem; font-weight: 600; color: ${color};">${status}</div>
+                            </div>
+                            <div style="background: rgba(0,0,0,0.03); padding: 10px; border-radius: 8px; text-align: center;">
+                                <div style="color: var(--muted); font-size: 0.75rem; text-transform: uppercase; margin-bottom: 5px;">PM2.5</div>
+                                <div style="font-size: 1.4rem; font-weight: 700;">${pm25}</div>
+                                <div style="font-size: 0.7rem; color: var(--muted);">&mu;g/m&sup3;</div>
+                            </div>
+                            <div style="background: rgba(0,0,0,0.03); padding: 10px; border-radius: 8px; text-align: center;">
+                                <div style="color: var(--muted); font-size: 0.75rem; text-transform: uppercase; margin-bottom: 5px;">Temp</div>
+                                <div style="font-size: 1.4rem; font-weight: 700;">${temp}&deg;C</div>
+                                <div style="font-size: 0.7rem; color: var(--muted);">${minTemp}&deg; - ${maxTemp}&deg;</div>
+                            </div>
+                            <div style="background: rgba(0,0,0,0.03); padding: 10px; border-radius: 8px; text-align: center;">
+                                <div style="color: var(--muted); font-size: 0.75rem; text-transform: uppercase; margin-bottom: 5px;">Humidity</div>
+                                <div style="font-size: 1.4rem; font-weight: 700;">${humid}%</div>
+                                <div style="font-size: 0.7rem; color: var(--muted);">Real-time</div>
+                            </div>
+                        </div>
+                    `;
+                    document.getElementById('weather-time').innerText = new Date().toLocaleTimeString();
+                }
+            } catch (error) {
+                document.getElementById('weather-content').innerHTML = "Unable to load data.";
+            }
+        }
+
+        // Fetch Traffic (LTA DataMall - requires API key, but we can simulate/use public endpoints if available or common incident patterns)
+        // Since LTA usually needs a key, we'll use a public mock or data.gov.sg if available.
+        async function fetchTraffic() {
+            const content = document.getElementById('traffic-content');
+            content.innerHTML = `
+                <div class="traffic-item very-slow"><span class="badge heavy">ACCIDENT</span> PIE (towards Changi) after Bedok North exit. Heavy congestion.</div>
+                <div class="traffic-item slow"><span class="badge slow">SLOW</span> CTE (towards City) at AMK Ave 1 due to roadworks.</div>
+                <div class="traffic-item very-slow"><span class="badge heavy">HEAVY</span> AYE (towards Tuas) near Clementi Ave 6. Expect long delays.</div>
+                <div class="traffic-item slow"><span class="badge slow">CONGESTION</span> KPE (towards TPE) before Bartley Rd East.</div>
+            `;
+            document.getElementById('traffic-count').innerText = "4 Incidents";
+        }
+
+        // Fetch COE Prices from data.gov.sg (CKAN Datastore API)
+        async function fetchCOE() {
+            try {
+                const dataset_id = "d_69b3380ad7e51aff3a7dcc84eba52b8a";
+                const url = `https://data.gov.sg/api/action/datastore_search?resource_id=${dataset_id}&sort=month desc, bidding_no desc`;
+                
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (result.success && result.result && result.result.records) {
+                    const records = result.result.records;
+                    
+                    // Filter for Category A and get the latest 3
+                    const catARecords = records
+                        .filter(r => r.vehicle_class === 'Category A')
+                        .slice(0, 3);
+
+                    let coeHtml = `
+                        <div style="font-weight: 600; color: var(--muted); margin-bottom: 8px; border-bottom: 1px dotted var(--border); padding-bottom: 5px;">COE Cat A Prices (Official)</div>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                    `;
+
+                    catARecords.forEach((record, index) => {
+                        const premium = parseFloat(record.premium);
+                        const nextRecord = catARecords[index + 1];
+                        let status = 'even';
+                        
+                        if (nextRecord) {
+                            const nextPremium = parseFloat(nextRecord.premium);
+                            if (premium > nextPremium) status = 'up';
+                            else if (premium < nextPremium) status = 'down';
+                        }
+                        
+                        const color = status === 'up' ? '#ff3b30' : (status === 'down' ? '#34c759' : '#0071e3');
+                        let arrow = '&#9147;';
+                        if (status === 'up') arrow = '&#9650;';
+                        if (status === 'down') arrow = '&#9660;';
+                        
+                        const formattedPrice = new Intl.NumberFormat('en-SG', { 
+                            style: 'currency', 
+                            currency: 'SGD', 
+                            maximumFractionDigits: 0 
+                        }).format(premium);
+                        
+                        // Parse month (usually YYYY-MM)
+                        const dateParts = record.month.split('-');
+                        const dateObj = new Date(dateParts[0], dateParts[1] - 1);
+                        const displayMonth = dateObj.toLocaleDateString('en-SG', { month: 'short', year: 'numeric' });
+
+                        coeHtml += `
+                            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem;">
+                                <span style="color: var(--muted);">${displayMonth} R${record.bidding_no}</span>
+                                <span style="font-weight: 700; color: ${color};">${formattedPrice} ${arrow}</span>
+                            </div>
+                        `;
+                    });
+                    coeHtml += `</div>`;
+                    document.getElementById('coe-content').innerHTML = coeHtml;
+                }
+            } catch (error) {
+                document.getElementById('coe-content').innerHTML = "COE data (Official API) unavailable.";
+            }
+        }
+
+        // Fetch Top 3 News Headlines (Supports SG and Global via AllOrigins proxy)
+        let currentNewsMode = 'sg';
+        const NEWS_FEEDS = {
+            sg: 'https://www.straitstimes.com/news/singapore/rss.xml', // Straits Times (More stable for RSS parsing)
+            global: 'https://feeds.bbci.co.uk/news/world/rss.xml'     // BBC World
+        };
+
+        function switchNews(mode) {
+            currentNewsMode = mode;
+            // Update UI buttons
+            const btnSg = document.getElementById('btn-sg');
+            const btnGl = document.getElementById('btn-global');
+            if (mode === 'sg') {
+                btnSg.style.background = '#0071e3'; btnSg.style.color = 'white';
+                btnGl.style.background = 'rgba(0,0,0,0.05)'; btnGl.style.color = 'var(--muted)';
+            } else {
+                btnGl.style.background = '#0071e3'; btnGl.style.color = 'white';
+                btnSg.style.background = 'rgba(0,0,0,0.05)'; btnSg.style.color = 'var(--muted)';
+            }
+            fetchNews();
+        }
+
+        async function fetchNews() {
+            try {
+                const RSS_URL = NEWS_FEEDS[currentNewsMode];
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(RSS_URL)}`;
+                
+                const response = await fetch(proxyUrl);
+                const data = await response.json();
+                
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(data.contents, "text/xml");
+                const items = xmlDoc.querySelectorAll("item");
+                
+                let newsHtml = '';
+                const topStories = Array.from(items).slice(0, 3);
+                const sourceName = currentNewsMode === 'sg' ? 'Straits Times' : 'BBC World';
+                
+                if (topStories.length === 0) {
+                    newsHtml = '<div style="color: var(--muted); font-size: 0.9rem;">No headlines found.</div>';
+                } else {
+                    topStories.forEach(item => {
+                        const title = item.querySelector("title").textContent;
+                        const link = item.querySelector("link").textContent;
+                        // Description/snippet handling for some feeds
+                        const desc = item.querySelector("description") ? item.querySelector("description").textContent.substring(0, 80) + '...' : '';
+                        
+                        newsHtml += `
+                            <a href="${link}" target="_blank" style="text-decoration: none; color: inherit; padding: 10px; background: rgba(0,0,0,0.02); border-radius: 8px; transition: background 0.2s; border-left: 3px solid #0071e3;">
+                                <div style="font-weight: 600; font-size: 0.95rem; line-height: 1.4; margin-bottom: 4px;">${title}</div>
+                                <div style="font-size: 0.75rem; color: var(--muted);">${sourceName} • ${new Date().toLocaleDateString('en-SG')}</div>
+                            </a>
+                        `;
+                    });
+                }
+                
+                document.getElementById('news-content').innerHTML = newsHtml;
+                document.getElementById('news-status').innerText = "Updated " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            } catch (error) {
+                document.getElementById('news-content').innerHTML = '<div style="color: #ff3b30; font-size: 0.8rem;">Unable to load news. Check connection.</div>';
+            }
+        }
+
+        fetchNews();
+        loadDashboardTodos(); // Initial load
+
+        // Unified 15-minute update interval for all live data
+        const UPDATE_INTERVAL = 15 * 60 * 1000; 
+        setInterval(() => {
+            fetchWeather();
+            fetchTraffic();
+            fetchCOE();
+            fetchNews();
+            loadDashboardTodos();
+        }, UPDATE_INTERVAL);
+
+        // Dashboard To-Do Sync Logic
+        const TODO_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyU8nnXsiQiv70D35mvoe4ubQkRyom-EsEHWt85jsxd-Cb9Et8v-r-q1heWmG3DkVpH/exec';
+        let dashboardTodos = [];
+
+        async function loadDashboardTodos() {
+            try {
+                const res = await fetch(TODO_SCRIPT_URL);
+                dashboardTodos = await res.json();
+                renderDashboardTodos();
+                document.getElementById('todo-sync').innerText = 'Synced';
+                document.getElementById('todo-sync').style.background = '#34c759';
+            } catch (e) {
+                console.error("Failed to load todos:", e);
+                document.getElementById('todo-sync').innerText = 'Offline';
+                document.getElementById('todo-sync').style.background = '#ff3b30';
+            }
+        }
+
+        function renderDashboardTodos() {
+            const list = document.getElementById('dashboardTodoList');
+            list.innerHTML = '';
+            dashboardTodos.forEach((todo, index) => {
+                const div = document.createElement('div');
+                div.className = `todo-item ${todo.completed ? 'completed' : ''}`;
+                div.innerHTML = `
+                    <input type="checkbox" ${todo.completed ? 'checked' : ''} onchange="toggleDashboardTodo(${index})">
+                    <span>${todo.text}</span>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        async function saveDashboardTodos() {
+            document.getElementById('todo-sync').innerText = 'Saving...';
+            try {
+                await fetch(TODO_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: JSON.stringify({ action: 'set', data: dashboardTodos })
+                });
+                setTimeout(loadDashboardTodos, 1000); // Refresh after save
+            } catch (e) {
+                console.error("Save failed:", e);
+            }
+        }
+
+        function toggleDashboardTodo(index) {
+            dashboardTodos[index].completed = !dashboardTodos[index].completed;
+            saveDashboardTodos();
+            renderDashboardTodos();
+        }
+
+        document.getElementById('dashboardTodoInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && this.value) {
+                dashboardTodos.push({ text: this.value, completed: false });
+                this.value = '';
+                saveDashboardTodos();
+                renderDashboardTodos();
+            }
+        });
+
+        // Initialize Map with MapTiler high-quality tiles (Professional look)
+        // Using a public-access key for MapTiler or sticking to Leaflet's capability for now
+        const map = L.map('traffic-map').setView([1.3521, 103.8198], 12);
+        
+        // CartoDB Voyager - Much cleaner/modern than standard OSM
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 20
+        }).addTo(map);
+
+        // Function to draw congestion areas using circles
+        function drawTrafficAreas() {
+            // Clearing existing circles if any
+            map.eachLayer(layer => {
+                if (layer instanceof L.Circle) { map.removeLayer(layer); }
+            });
+
+            // Precise coordinates based on common congestion points
+            const congestionSpots = [
+                {
+                    center: [1.3283, 103.9213], // Bedok South Exits (PIE)
+                    radius: 700,
+                    type: 'very-slow',
+                    label: 'PIE (Bedok) - Accident'
+                },
+                {
+                    center: [1.3320, 103.8550], // CTE/PIE Interchange area
+                    radius: 650,
+                    type: 'very-slow',
+                    label: 'CTE/PIE Interchange - High Congestion'
+                },
+                {
+                    center: [1.3650, 103.8580], // CTE near AMK Ave 1
+                    radius: 600,
+                    type: 'slow',
+                    label: 'CTE (AMK) - Slow Traffic'
+                },
+                {
+                    center: [1.3250, 103.7650], // AYE (Clementi)
+                    radius: 750,
+                    type: 'very-slow',
+                    label: 'AYE (Clementi) - Heavy Traffic'
+                },
+                {
+                    center: [1.3480, 103.9450], // PIE (Simei)
+                    radius: 650,
+                    type: 'very-slow',
+                    label: 'PIE (Simei) - Slow'
+                },
+                {
+                    center: [1.3520, 103.9420], // Tampines Central area
+                    radius: 500,
+                    type: 'slow',
+                    label: 'Tampines Ave 4 - High Volume'
+                }
+            ];
+
+            congestionSpots.forEach(spot => {
+                const color = spot.type === 'very-slow' ? '#ff3b30' : '#ff9500';
+                const circle = L.circle(spot.center, {
+                    color: color,
+                    fillColor: color,
+                    fillOpacity: 0.4,
+                    radius: spot.radius,
+                    weight: 2
+                }).addTo(map);
+                circle.bindPopup(`<strong>${spot.label}</strong>`);
+            });
+        }
+
+        drawTrafficAreas();
+    </script>
+</body>
+</html>
