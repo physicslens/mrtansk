@@ -223,12 +223,16 @@
         };
         const app = firebase.initializeApp(firebaseConfig);
         
-        // Initialize App Check
-        const appCheck = firebase.appCheck();
-        appCheck.activate(
-            new firebase.appCheck.ReCaptchaEnterpriseProvider('6Ldp85IsAAAAABJehHpJzd4JYRj-OvXSDXis7dy3'),
-            true // isTokenAutoRefreshEnabled
-        );
+        // Initialize App Check ONLY when running on the live domain
+        if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+            const appCheck = firebase.appCheck();
+            appCheck.activate(
+                new firebase.appCheck.ReCaptchaEnterpriseProvider('6Ldp85IsAAAAABJehHpJzd4JYRj-OvXSDXis7dy3'),
+                true // isTokenAutoRefreshEnabled
+            );
+        } else {
+            console.warn("App Check skipped: Running on localhost. Ensure 'mrtansk.github.io' is added to reCAPTCHA domains.");
+        }
 
         const database = firebase.database();
 
