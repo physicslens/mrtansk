@@ -459,16 +459,6 @@
             }
         }
 
-                if (!document.getElementById('news-global-content').innerHTML) {
-                    document.getElementById('news-global-content').innerHTML = '<div style="color: var(--muted); font-size: 0.8rem;">Global headlines currently unavailable.</div>';
-                }
-
-                document.getElementById('news-status').innerText = "Updated " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            } catch (error) {
-                console.error("News fetch error:", error);
-            }
-        }
-
         fetchNews();
 
         // Dashboard API URLs (Restricted via Google/Firebase Consoles)
