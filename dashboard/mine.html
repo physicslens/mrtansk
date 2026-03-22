@@ -465,7 +465,7 @@
 
         fetchNews();
 
-        // Dashboard To-Do Sync Logic
+        // Dashboard API URLs (Restricted via Google/Firebase Consoles)
         const TODO_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwNuz8c6u1hQPRMLgO111V2WXGwImtbXY4ncRLBG-PwbO1bgrJA_VMfqmgCQoYADUL8/exec';
         let dashboardTodos = [];
 
@@ -576,29 +576,14 @@
         fetchWeather();
         fetchCOE();
 
-        // --- Firebase Configuration ---
-        // TODO: Replace with your project's Firebase configuration
-        const firebaseConfig = {
-          apiKey: "AIzaSyB6lMGTpywnNwHKosDPAgjqWe4-cEuOuTI",
-          authDomain: "fitness-91f42.firebaseapp.com",
-          projectId: "fitness-91f42",
-          storageBucket: "fitness-91f42.firebasestorage.app",
-          messagingSenderId: "50700529862",
-          appId: "1:50700529862:web:c2590ce23405ca9d4327c7",
-          databaseURL: "https://fitness-91f42-default-rtdb.asia-southeast1.firebasedatabase.app"
-        };
-
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
-        const database = firebase.database();
-
-        // --- NEW: REST API Fallback Logic ---
+        // Database API URL
         const DB_BASE_URL = "https://fitness-91f42-default-rtdb.asia-southeast1.firebasedatabase.app/runs.json";
 
         async function saveRunREST(data) {
             try {
                 const response = await fetch(DB_BASE_URL, {
                     method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 });
                 return response.ok;
@@ -678,35 +663,31 @@
         }
 
         // Load runs and listen for updates
-        function loadRuns() {
-            console.log("Starting Firebase listener...");
+        async function loadRuns() {
+            console.log("Loading runs via direct API...");
             const historyTable = document.getElementById('run-history');
             
-            const runsRef = database.ref('runs');
-            
-            runsRef.orderByChild('date').limitToLast(10).on('value', (snapshot) => {
-                console.log("Firebase data received:", snapshot.val());
+            try {
+                const data = await loadRunsREST();
+                console.log("Firebase data received:", data);
                 
                 // Update Badge to Online
                 const statusBadge = document.getElementById('run-status');
                 if (statusBadge) {
-                    statusBadge.innerText = 'Online (Live)';
+                    statusBadge.innerText = 'Online';
                     statusBadge.className = 'badge bg-success';
                 }
 
                 historyTable.innerHTML = '';
-                const runs = [];
-                snapshot.forEach((childSnapshot) => {
-                    runs.push({ id: childSnapshot.key, ...childSnapshot.val() });
-                });
-                
-                if (runs.length === 0) {
-                    historyTable.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No runs found in database.</td></tr>';
+                if (!data) {
+                    historyTable.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No runs found.</td></tr>';
                     return;
                 }
 
+                const runs = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+                
                 // Show latest first
-                runs.reverse().forEach(run => {
+                runs.sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 10).forEach(run => {
                     const row = `
                         <tr>
                             <td>${run.date}</td>
@@ -717,10 +698,10 @@
                     `;
                     historyTable.innerHTML += row;
                 });
-            }, (error) => {
-                console.error("Firebase Listener Error:", error);
-                historyTable.innerHTML = `<tr><td colspan="4" class="text-danger">Offline: ${error.message}</td></tr>`;
-            });
+            } catch (error) {
+                console.error("Proxy Load Error:", error);
+                historyTable.innerHTML = `<tr><td colspan="4" class="text-danger">Offline: Proxy unreachable</td></tr>`;
+            }
         }
 
         document.getElementById('run-form').addEventListener('submit', saveRun);
