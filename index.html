@@ -1,0 +1,1129 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Participation Score Dashboard</title>
+	<style>
+		:root {
+			--bg: #f4f0e8;
+			--panel: #fffaf1;
+			--ink: #2c251a;
+			--muted: #6f6456;
+			--accent: #1f7a62;
+			--accent-soft: #d6efe7;
+			--border: #d8cebf;
+			--warn: #8a5a1c;
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		body {
+			margin: 0;
+			min-height: 100vh;
+			font-family: "Avenir Next", "Helvetica Neue", "Segoe UI", sans-serif;
+			color: var(--ink);
+			background:
+				radial-gradient(circle at 20% 10%, #fff7dd 0%, transparent 40%),
+				radial-gradient(circle at 85% 15%, #d8efe3 0%, transparent 36%),
+				linear-gradient(135deg, #f8f4ec 0%, #ebe3d7 100%);
+			padding: 28px;
+		}
+
+		.wrap {
+			max-width: 1100px;
+			margin: 0 auto;
+			display: grid;
+			gap: 20px;
+		}
+
+		.hero,
+		.panel {
+			background: var(--panel);
+			border: 1px solid var(--border);
+			border-radius: 16px;
+			box-shadow: 0 8px 22px rgba(80, 63, 35, 0.08);
+		}
+
+		.hero {
+			padding: 22px;
+		}
+
+		h1 {
+			margin: 0;
+			font-size: clamp(1.4rem, 2.5vw, 2rem);
+			letter-spacing: 0.2px;
+		}
+
+		.subtitle {
+			margin-top: 8px;
+			color: var(--muted);
+		}
+
+		.controls {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 10px;
+			margin-top: 14px;
+			align-items: center;
+		}
+
+		.status {
+			margin-left: 0;
+			color: var(--muted);
+			font-size: 0.95rem;
+		}
+
+		.grid {
+			display: grid;
+			gap: 14px;
+			grid-template-columns: repeat(4, minmax(130px, 1fr));
+		}
+
+		.kpi {
+			padding: 14px;
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			background: linear-gradient(180deg, #fffdf8 0%, #f8f1e4 100%);
+		}
+
+		.kpi .label {
+			font-size: 0.85rem;
+			color: var(--muted);
+		}
+
+		.kpi .value {
+			margin-top: 8px;
+			font-size: 1.5rem;
+			font-weight: 700;
+			color: #1f4f42;
+		}
+
+		.panel {
+			padding: 16px;
+		}
+
+		.toolbar {
+			display: flex;
+			gap: 10px;
+			flex-wrap: wrap;
+			align-items: center;
+			margin-bottom: 12px;
+		}
+
+		.toolbar input,
+		.toolbar select {
+			border: 1px solid var(--border);
+			border-radius: 10px;
+			padding: 8px 10px;
+			font: inherit;
+			background: #fff;
+			color: var(--ink);
+		}
+
+		table {
+			width: 100%;
+			border-collapse: collapse;
+			font-size: 0.95rem;
+		}
+
+		th,
+		td {
+			padding: 10px;
+			border-bottom: 1px solid var(--border);
+			text-align: left;
+			vertical-align: middle;
+		}
+
+		th {
+			background: #f8efdf;
+			position: sticky;
+			top: 0;
+			z-index: 1;
+		}
+
+		.score-pill {
+			display: inline-block;
+			min-width: 48px;
+			text-align: center;
+			border-radius: 999px;
+			padding: 4px 10px;
+			background: var(--accent-soft);
+			color: #0f4f3f;
+			font-weight: 700;
+		}
+
+		.note {
+			margin-top: 12px;
+			color: var(--warn);
+			font-size: 0.9rem;
+		}
+
+		@media (max-width: 840px) {
+			body {
+				padding: 16px;
+			}
+
+			.grid {
+				grid-template-columns: repeat(2, minmax(120px, 1fr));
+			}
+
+			.status {
+				width: 100%;
+				margin-left: 0;
+			}
+		}
+
+		.modal {
+			display: none;
+			position: fixed;
+			z-index: 1000;
+			left: 0;
+			top: 0;
+			width: 100%;
+			height: 100%;
+			background: rgba(0, 0, 0, 0.4);
+		}
+
+		.modal.active {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+
+		.modal-content {
+			background: var(--panel);
+			border: 1px solid var(--border);
+			border-radius: 16px;
+			box-shadow: 0 8px 22px rgba(80, 63, 35, 0.15);
+			padding: 22px;
+			max-width: 900px;
+			max-height: 85vh;
+			overflow-y: auto;
+			width: 95%;
+		}
+
+		.modal-header {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			margin-bottom: 16px;
+		}
+
+		.modal-header h2 {
+			margin: 0;
+			font-size: 1.5rem;
+		}
+
+		.modal-close {
+			background: var(--border);
+			border: none;
+			border-radius: 50%;
+			width: 32px;
+			height: 32px;
+			cursor: pointer;
+			font-size: 1.2rem;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+
+		.modal-close:hover {
+			background: var(--muted);
+		}
+
+		.detail-table {
+			width: 100%;
+			border-collapse: collapse;
+			font-size: 0.9rem;
+			margin-bottom: 16px;
+		}
+
+		.detail-table th,
+		.detail-table td {
+			padding: 8px;
+			border-bottom: 1px solid var(--border);
+			text-align: left;
+		}
+
+		.detail-table th {
+			background: #f8efdf;
+			font-weight: 700;
+		}
+
+		.detail-table tr:hover {
+			background: #faf6f0;
+		}
+
+		.rater-link {
+			color: var(--accent);
+			cursor: pointer;
+			text-decoration: none;
+		}
+
+		.rater-link:hover {
+			text-decoration: underline;
+		}
+
+		.summary-box {
+			background: var(--accent-soft);
+			border: 1px solid var(--accent);
+			border-radius: 12px;
+			padding: 12px;
+			margin-top: 12px;
+		}
+
+		.tab-btn {
+			border: 1px solid var(--border);
+			border-bottom: 3px solid transparent;
+			border-radius: 10px 10px 0 0;
+			padding: 10px 16px;
+			font: inherit;
+			background: #f5f1e8;
+			color: var(--ink);
+			cursor: pointer;
+			margin-right: 4px;
+			transition: all 0.2s;
+		}
+
+		.tab-btn:hover {
+			background: var(--accent-soft);
+		}
+
+		.tab-btn.active {
+			background: var(--panel);
+			border-bottom-color: var(--accent);
+			color: var(--accent);
+			font-weight: 700;
+		}
+
+		.view-container {
+			display: none;
+		}
+
+		.view-container.active {
+			display: block;
+		}
+
+		.slider-config {
+			background: var(--accent-soft);
+			border: 1px solid var(--accent);
+			border-radius: 12px;
+			padding: 14px;
+			margin-bottom: 14px;
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+			gap: 12px;
+		}
+
+		.slider-input {
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+		}
+
+		.slider-input label {
+			font-size: 0.85rem;
+			font-weight: 600;
+			color: var(--ink);
+		}
+
+		.slider-input input[type="range"] {
+			width: 100%;
+			cursor: pointer;
+		}
+
+		.slider-input .value {
+			font-size: 0.9rem;
+			color: var(--muted);
+		}
+
+		.band-b1 { background: #c8e6c9; color: #1b5e20; }
+		.band-b2 { background: #fff9c4; color: #f57f17; }
+		.band-b3 { background: #ffe0b2; color: #e65100; }
+		.band-b4 { background: #ffccbc; color: #bf360c; }
+
+		.band-badge {
+			display: inline-block;
+			padding: 4px 8px;
+			border-radius: 4px;
+			font-weight: 700;
+			font-size: 0.85rem;
+		}
+
+		.band-chart {
+			width: 220px;
+		}
+
+		.band-chart-track {
+			height: 12px;
+			display: flex;
+			overflow: hidden;
+			border-radius: 999px;
+			border: 1px solid var(--border);
+			background: #f2ece0;
+		}
+
+		.band-segment {
+			height: 100%;
+		}
+
+		.band-legend-inline {
+			margin-top: 6px;
+			font-size: 0.78rem;
+			color: var(--muted);
+			white-space: nowrap;
+		}
+	</style>
+</head>
+<body>
+	<div id="passwordOverlay" style="position:fixed;z-index:9999;inset:0;background:#f4f0e8;display:flex;align-items:center;justify-content:center;">
+		<form id="passwordForm" style="background:#fff;padding:32px 28px 24px 28px;border-radius:16px;box-shadow:0 2px 16px #0002;display:flex;flex-direction:column;align-items:center;gap:18px;min-width:320px;">
+			<h2 style="margin:0 0 8px 0;font-size:1.3rem;">Participation Score Dashboard</h2>
+			<div style="font-size:1rem;color:#555;margin-bottom:8px;">Enter password to access</div>
+			<input id="passwordInput" type="password" placeholder="Password" autocomplete="off" style="font-size:1.1rem;padding:8px 12px;border-radius:8px;border:1px solid #ccc;width:100%;max-width:220px;" autofocus />
+			<button type="submit" style="margin-top:8px;padding:8px 18px;border-radius:8px;border:none;background:#1f7a62;color:#fff;font-size:1rem;cursor:pointer;">Access</button>
+			<div id="passwordError" style="color:#b71c1c;font-size:0.98rem;display:none;">Incorrect password. Try again.</div>
+		</form>
+	</div>
+	<main class="wrap">
+		<section class="hero">
+			<h1>Participation Score Dashboard</h1>
+			<p class="subtitle">Calculates each student's average score from peer-evaluation ratings in the survey.</p>
+			<div class="controls">
+				<button id="loadCsvBtn" style="border: 1px solid var(--border); border-radius: 10px; padding: 8px 14px; font: inherit; background: #fff; color: var(--ink); cursor: pointer;">Load CSV File</button>
+				<input id="csvFileInput" type="file" accept=".csv,text/csv" style="display: none;" />
+				<span id="status" class="status">Loading survey data...</span>
+			</div>
+		</section>
+
+		<section class="panel">
+			<div class="grid" id="kpiGrid">
+				<div class="kpi"><div class="label">Students Rated</div><div class="value" id="kpiStudents">0</div></div>
+				<div class="kpi"><div class="label">Total Ratings Used</div><div class="value" id="kpiRatings">0</div></div>
+				<div class="kpi"><div class="label">Overall Average</div><div class="value" id="kpiOverall">-</div></div>
+				<div class="kpi"><div class="label">Total Classes</div><div class="value" id="kpiClasses">-</div></div>
+			</div>
+		</section>
+
+		<section class="panel">
+			<div class="toolbar">
+				<button class="tab-btn active" onclick="switchView('students')">Student Scores</button>
+				<button class="tab-btn" onclick="switchView('classes')">Class Analysis</button>
+			</div>
+
+			<div id="studentsView" class="view-container active">
+				<div class="slider-config">
+					<div class="slider-input">
+						<label>Band 1-2 Threshold:</label>
+						<input type="range" id="slider1" min="1" max="4" step="0.1" value="3.4" />
+						<div class="value">Band 1: > <span id="val1">3.4</span></div>
+					</div>
+					<div class="slider-input">
+						<label>Band 2-3 Threshold:</label>
+						<input type="range" id="slider2" min="1" max="4" step="0.1" value="3.0" />
+						<div class="value">Band 2: <span id="val2">3.0</span> - <span id="val1-display">3.4</span></div>
+					</div>
+					<div class="slider-input">
+						<label>Band 3-4 Threshold:</label>
+						<input type="range" id="slider3" min="1" max="4" step="0.1" value="2.0" />
+						<div class="value">Band 3: <span id="val3">2.0</span> - 2.99</div>
+					</div>
+					<div style="display: flex; align-items: flex-end; gap: 8px;">
+						<div>
+							<div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 8px;">Band Legend</div>
+							<div style="display: flex; gap: 6px; flex-wrap: wrap;">
+								<div class="band-b1" style="padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600;">B1</div>
+								<div class="band-b2" style="padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600;">B2</div>
+								<div class="band-b3" style="padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600;">B3</div>
+								<div class="band-b4" style="padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600;">B4</div>
+							</div>
+						</div>
+					</div>
+				</div>
+				
+				<div class="toolbar">
+					<input id="searchInput" type="text" placeholder="Search student name" />
+					<select id="sortSelect">
+						<option value="classNameAsc">Sort: Class, Name (Default)</option>
+						<option value="scoreDesc">Sort: Score (High to Low)</option>
+						<option value="scoreAsc">Sort: Score (Low to High)</option>
+						<option value="nameAsc">Sort: Name (A to Z)</option>
+						<option value="countDesc">Sort: Number of Ratings</option>
+					</select>
+					<button id="downloadBtn" style="border: 1px solid var(--border); border-radius: 10px; padding: 8px 14px; font: inherit; background: var(--accent); color: white; cursor: pointer;">Download CSV</button>
+				</div>
+
+				<div style="overflow: auto; max-height: 60vh;">
+					<table>
+						<thead>
+							<tr>
+								<th>#</th>
+								<th>Class</th>
+								<th>Student</th>
+								<th>Average Score (1-4)</th>
+								<th>Band</th>
+								<th>Ratings Count</th>
+							</tr>
+						</thead>
+						<tbody id="resultsBody"></tbody>
+					</table>
+				</div>
+
+				<div class="note" id="note"></div>
+			</div>
+
+			<div id="classesView" class="view-container">
+				<div style="overflow: auto; max-height: 60vh;">
+					<table>
+						<thead>
+							<tr>
+								<th>#</th>
+								<th>Class</th>
+								<th>Students</th>
+								<th>Avg Score</th>
+								<th>Highest</th>
+								<th>Lowest</th>
+								<th>Band Breakdown</th>
+								<th>Ratings Count</th>
+							</tr>
+						</thead>
+						<tbody id="classResultsBody"></tbody>
+					</table>
+				</div>
+			</div>
+		</section>
+
+		<div id="detailModal" class="modal">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h2 id="modalTitle">Student Details</h2>
+					<button class="modal-close" onclick="closeDetailModal()">✕</button>
+				</div>
+				<div id="modalBody"></div>
+			</div>
+		</div>
+	</main>
+
+	<script>
+
+			// Password protection logic
+			(function() {
+				const overlay = document.getElementById('passwordOverlay');
+				const form = document.getElementById('passwordForm');
+				const input = document.getElementById('passwordInput');
+				const error = document.getElementById('passwordError');
+				const CORRECT = 'IPscience2026';
+				function unlock() {
+					overlay.style.display = 'none';
+					document.body.style.overflow = '';
+				}
+				form.addEventListener('submit', function(e) {
+					e.preventDefault();
+					if (input.value === CORRECT) {
+						unlock();
+					} else {
+						error.style.display = 'block';
+						input.value = '';
+						input.focus();
+					}
+				});
+				input.addEventListener('input', function() {
+					error.style.display = 'none';
+				});
+				document.body.style.overflow = 'hidden';
+				input.focus();
+			})();
+
+		const INCLUDED_CSV = "responses.csv";
+
+		const ratingToScore = {
+			"below average": 1,
+			average: 2,
+			good: 3,
+			"very good": 4,
+			excellent: 4
+		};
+
+		const memberBlocks = [
+			{ nameKey: "Q3 - Member 1's name", scoreKeys: ["Q4 - Participated actively in brainstorming of ideas", "Q5 - Made good, useful and relevant contributions to project and discussion", "Q6 - Able to adhere to deadlines", "Q7 - Remains on task all the time while motivating others", "Q8 - Able to accept different perspectives from members, able to resolve conflict", "Q9 - Submits quality work"] },
+			{ nameKey: "Q11 - Member 2's name", scoreKeys: ["Q12 - Participated actively in brainstorming of ideas", "Q13 - Made good, useful and relevant contributions to project and discussion", "Q14 - Able to adhere to deadlines", "Q15 - Remains on task all the time while motivating others", "Q16 - Able to accept different perspectives from members, able to resolve conflict", "Q17 - Submits quality work"] },
+			{ nameKey: "Q19 - Member 3's name", scoreKeys: ["Q20 - Participated actively in brainstorming of ideas", "Q21 - Made good, useful and relevant contributions to project and discussion", "Q22 - Able to adhere to deadlines", "Q23 - Remains on task all the time while motivating others", "Q24 - Able to accept different perspectives from members, able to resolve conflict", "Q25 - Submits quality work"] },
+			{ nameKey: "Q27 - Member 4's name", scoreKeys: ["Q28 - Participated actively in brainstorming of ideas", "Q29 - Made good, useful and relevant contributions to project and discussion", "Q30 - Able to adhere to deadlines", "Q31 - Remains on task all the time while motivating others", "Q32 - Able to accept different perspectives from members, able to resolve conflict", "Q33 - Submits quality work"] }
+		];
+
+		const els = {
+			status: document.getElementById("status"),
+			loadCsvBtn: document.getElementById("loadCsvBtn"),
+			csvFileInput: document.getElementById("csvFileInput"),
+			searchInput: document.getElementById("searchInput"),
+			sortSelect: document.getElementById("sortSelect"),
+			resultsBody: document.getElementById("resultsBody"),
+			classResultsBody: document.getElementById("classResultsBody"),
+			note: document.getElementById("note"),
+			kpiStudents: document.getElementById("kpiStudents"),
+			kpiRatings: document.getElementById("kpiRatings"),
+			kpiOverall: document.getElementById("kpiOverall"),
+			kpiClasses: document.getElementById("kpiClasses"),
+			downloadBtn: document.getElementById("downloadBtn")
+		};
+
+		let allRows = [];
+		let detailedRatings = new Map();
+		let bandThresholds = { b1: 3.4, b2: 3.0, b3: 2.0 };
+
+		function normalizeName(value) {
+			if (!value) return "";
+			return value.replace(/\s+/g, " ").trim().toUpperCase();
+		}
+
+		function getBandClass(score) {
+			if (score > bandThresholds.b1) return "band-b1";
+			if (score > bandThresholds.b2) return "band-b2";
+			if (score > bandThresholds.b3) return "band-b3";
+			return "band-b4";
+		}
+
+		function getBandName(score) {
+			if (score > bandThresholds.b1) return "B1";
+			if (score > bandThresholds.b2) return "B2";
+			if (score > bandThresholds.b3) return "B3";
+			return "B4";
+		}
+
+		function parseCSV(text) {
+			const rows = [];
+			let row = [];
+			let cell = "";
+			let inQuotes = false;
+
+			for (let i = 0; i < text.length; i += 1) {
+				const ch = text[i];
+				const next = text[i + 1];
+
+				if (inQuotes) {
+					if (ch === '"' && next === '"') {
+						cell += '"';
+						i += 1;
+					} else if (ch === '"') {
+						inQuotes = false;
+					} else {
+						cell += ch;
+					}
+					continue;
+				}
+
+				if (ch === '"') {
+					inQuotes = true;
+				} else if (ch === ",") {
+					row.push(cell);
+					cell = "";
+				} else if (ch === "\n") {
+					row.push(cell);
+					rows.push(row);
+					row = [];
+					cell = "";
+				} else if (ch === "\r") {
+					continue;
+				} else {
+					cell += ch;
+				}
+			}
+
+			if (cell.length > 0 || row.length > 0) {
+				row.push(cell);
+				rows.push(row);
+			}
+
+			return rows;
+		}
+
+		function toObjects(csvText) {
+			const matrix = parseCSV(csvText);
+			if (matrix.length < 2) return [];
+
+			const headers = matrix[0];
+			return matrix.slice(1).map((r) => {
+				const obj = {};
+				headers.forEach((h, idx) => {
+					obj[h] = (r[idx] || "").trim();
+				});
+				return obj;
+			});
+		}
+
+		function extractScores(rows) {
+			// First pass: build a map of student names to their actual class
+			const studentClassMap = new Map();
+			rows.forEach((row) => {
+				const raterName = normalizeName(row["Name"] || "");
+				const raterClass = (row["Class"] || "").trim();
+				if (raterName) {
+					studentClassMap.set(raterName, raterClass);
+				}
+			});
+
+			const agg = new Map();
+			detailedRatings.clear();
+			let unknownLabels = 0;
+			let totalRatingValues = 0;
+
+			rows.forEach((row) => {
+				const raterName = (row["Name"] || "").trim();
+				const raterClass = (row["Class"] || "").trim();
+				
+				memberBlocks.forEach((block) => {
+					const rawName = row[block.nameKey] || "";
+					const student = normalizeName(rawName);
+					if (!student) return;
+
+					// Look up the student's actual class
+					const studentClass = studentClassMap.get(student) || "";
+
+					let sum = 0;
+					let count = 0;
+					const scores = [];
+
+					block.scoreKeys.forEach((key) => {
+						const raw = (row[key] || "").trim();
+						if (!raw) return;
+						const score = ratingToScore[raw.toLowerCase()];
+						if (!score) {
+							unknownLabels += 1;
+							return;
+						}
+						scores.push(score);
+						sum += score;
+						count += 1;
+						totalRatingValues += 1;
+					});
+
+					if (count === 0) return;
+
+					const ratingAvg = sum / count;
+					
+					// Store detailed rating info
+					if (!detailedRatings.has(student)) {
+						detailedRatings.set(student, []);
+					}
+					detailedRatings.get(student).push({
+						raterName,
+						raterClass,
+						scores,
+						sum,
+						count,
+						avg: ratingAvg
+					});
+
+					// Aggregate overall scores
+					const item = agg.get(student) || { name: student, class: studentClass, total: 0, count: 0 };
+					item.total += sum;
+					item.count += count;
+					agg.set(student, item);
+				});
+			});
+
+			const list = Array.from(agg.values()).map((x) => ({
+				name: x.name,
+				class: x.class,
+				avg: x.total / x.count,
+				count: x.count
+			}));
+
+			return { list, unknownLabels, totalRatingValues };
+		}
+
+		function renderKpis(list, totalRatingValues) {
+			const students = list.length;
+			const overall = list.length
+				? list.reduce((acc, s) => acc + s.avg, 0) / list.length
+				: 0;
+			const classes = new Set(list.map(s => s.class)).size;
+
+			els.kpiStudents.textContent = String(students);
+			els.kpiRatings.textContent = String(totalRatingValues);
+			els.kpiOverall.textContent = students ? overall.toFixed(2) : "-";
+			els.kpiClasses.textContent = String(classes);
+		}
+
+		function renderTable() {
+			const search = els.searchInput.value.trim().toUpperCase();
+			const sortBy = els.sortSelect.value;
+
+			let rows = allRows.filter((r) => r.name.includes(search));
+
+			rows = rows.sort((a, b) => {
+				if (sortBy === "scoreAsc") return a.avg - b.avg || a.class.localeCompare(b.class) || a.name.localeCompare(b.name);
+				if (sortBy === "nameAsc") return a.name.localeCompare(b.name) || a.class.localeCompare(b.class);
+				if (sortBy === "countDesc") return b.count - a.count || b.avg - a.avg;
+				if (sortBy === "scoreDesc") return b.avg - a.avg || a.class.localeCompare(b.class) || a.name.localeCompare(b.name);
+				// default: classNameAsc
+				return a.class.localeCompare(b.class) || a.name.localeCompare(b.name);
+			});
+
+			els.resultsBody.innerHTML = "";
+
+			rows.forEach((r, idx) => {
+				const tr = document.createElement("tr");
+				const bandClass = getBandClass(r.avg);
+				const bandName = getBandName(r.avg);
+				tr.innerHTML = `
+					<td>${idx + 1}</td>
+					<td>${r.class}</td>
+					<td><span class="rater-link" onclick="showDetailModal('${r.name.replace(/'/g, "\\'")}')">${r.name}</span></td>
+					<td><span class="score-pill">${r.avg.toFixed(2)}</span></td>
+					<td><span class="band-badge ${bandClass}">${bandName}</span></td>
+					<td>${r.count}</td>
+				`;
+				els.resultsBody.appendChild(tr);
+			});
+
+			if (!rows.length) {
+				const tr = document.createElement("tr");
+				tr.innerHTML = '<td colspan="6">No matching students.</td>';
+				els.resultsBody.appendChild(tr);
+			}
+		}
+
+		function applyCsvText(csvText, sourceLabel) {
+			const objects = toObjects(csvText);
+			if (!objects.length) {
+				els.status.textContent = "Could not find data rows in the CSV.";
+				return;
+			}
+
+			const { list, unknownLabels, totalRatingValues } = extractScores(objects);
+			allRows = list;
+			renderKpis(allRows, totalRatingValues);
+			renderTable();
+			renderClassAnalysis();
+
+			els.status.textContent = `Loaded ${sourceLabel}: ${objects.length} responses, ${allRows.length} students.`;
+			els.note.textContent = unknownLabels
+				? `${unknownLabels} rating entries were skipped because their labels were not recognized.`
+				: "All rating labels were recognized.";
+		}
+
+		function renderClassAnalysis() {
+			// Group students by class
+			const classDashboard = new Map();
+			allRows.forEach((student) => {
+				if (!classDashboard.has(student.class)) {
+					classDashboard.set(student.class, []);
+				}
+				classDashboard.get(student.class).push(student);
+			});
+
+			els.classResultsBody.innerHTML = "";
+
+			const sortedClasses = Array.from(classDashboard.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+			sortedClasses.forEach(([className, students], idx) => {
+				const scores = students.map((s) => s.avg);
+				const classAvg = scores.reduce((a, b) => a + b, 0) / scores.length;
+				const highest = Math.max(...scores);
+				const lowest = Math.min(...scores);
+				const totalRatings = students.reduce((sum, s) => sum + s.count, 0);
+
+				const bandCounts = { B1: 0, B2: 0, B3: 0, B4: 0 };
+				students.forEach((s) => {
+					const band = getBandName(s.avg);
+					bandCounts[band] += 1;
+				});
+
+				const totalStudents = students.length || 1;
+				const b1Pct = (bandCounts.B1 / totalStudents) * 100;
+				const b2Pct = (bandCounts.B2 / totalStudents) * 100;
+				const b3Pct = (bandCounts.B3 / totalStudents) * 100;
+				const b4Pct = (bandCounts.B4 / totalStudents) * 100;
+
+				const tr = document.createElement("tr");
+				tr.innerHTML = `
+					<td>${idx + 1}</td>
+					<td><strong>${className}</strong></td>
+					<td>${students.length}</td>
+					<td><span class="score-pill">${classAvg.toFixed(2)}</span></td>
+					<td>${highest.toFixed(2)}</td>
+					<td>${lowest.toFixed(2)}</td>
+					<td>
+						<div class="band-chart">
+							<div class="band-chart-track" title="B1: ${bandCounts.B1}, B2: ${bandCounts.B2}, B3: ${bandCounts.B3}, B4: ${bandCounts.B4}">
+								<div class="band-segment band-b1" style="width: ${b1Pct.toFixed(2)}%"></div>
+								<div class="band-segment band-b2" style="width: ${b2Pct.toFixed(2)}%"></div>
+								<div class="band-segment band-b3" style="width: ${b3Pct.toFixed(2)}%"></div>
+								<div class="band-segment band-b4" style="width: ${b4Pct.toFixed(2)}%"></div>
+							</div>
+							<div class="band-legend-inline">B1 ${bandCounts.B1} | B2 ${bandCounts.B2} | B3 ${bandCounts.B3} | B4 ${bandCounts.B4}</div>
+						</div>
+					</td>
+					<td>${totalRatings}</td>
+				`;
+				els.classResultsBody.appendChild(tr);
+			});
+		}
+
+		function switchView(view) {
+			// Update tab buttons
+			document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+			event.target.classList.add('active');
+
+			// Update view containers
+			document.getElementById('studentsView').classList.remove('active');
+			document.getElementById('classesView').classList.remove('active');
+
+			if (view === 'students') {
+				document.getElementById('studentsView').classList.add('active');
+			} else {
+				document.getElementById('classesView').classList.add('active');
+			}
+		}
+
+		function updateBandThresholds() {
+			bandThresholds.b1 = parseFloat(document.getElementById('slider1').value);
+			bandThresholds.b2 = parseFloat(document.getElementById('slider2').value);
+			bandThresholds.b3 = parseFloat(document.getElementById('slider3').value);
+
+			// Update display values
+			document.getElementById('val1').textContent = bandThresholds.b1.toFixed(1);
+			document.getElementById('val1-display').textContent = bandThresholds.b1.toFixed(1);
+			document.getElementById('val2').textContent = bandThresholds.b2.toFixed(1);
+			document.getElementById('val3').textContent = bandThresholds.b3.toFixed(1);
+
+			// Re-render tables
+			renderTable();
+			renderClassAnalysis();
+		}
+
+		// Add slider event listeners
+		document.getElementById('slider1').addEventListener('input', updateBandThresholds);
+		document.getElementById('slider2').addEventListener('input', updateBandThresholds);
+		document.getElementById('slider3').addEventListener('input', updateBandThresholds);
+
+		els.searchInput.addEventListener("input", renderTable);
+		els.sortSelect.addEventListener("change", renderTable);
+		els.loadCsvBtn.addEventListener("click", () => {
+			els.csvFileInput.click();
+		});
+
+		function showDetailModal(studentName) {
+			const ratings = detailedRatings.get(studentName);
+			if (!ratings || !ratings.length) return;
+
+			const student = allRows.find(r => r.name === studentName);
+			const title = `${student.class} - ${studentName}`;
+			
+			let html = `<p><strong>Class:</strong> ${student.class} | <strong>Overall Average:</strong> ${student.avg.toFixed(2)} (from ${student.count} ratings)</p>`;
+			html += '<h3>Individual Ratings</h3>';
+			html += '<table class="detail-table">';
+			html += '<thead><tr><th>Rater Name (Class)</th><th>Q4</th><th>Q5</th><th>Q6</th><th>Q7</th><th>Q8</th><th>Q9</th><th>Avg</th></tr></thead>';
+			html += '<tbody>';
+
+			let totalSum = 0;
+			let totalCount = 0;
+
+			ratings.forEach((rating) => {
+				const scoreDisplay = rating.scores.map(s => s).join(' / ');
+				html += `<tr>
+					<td>${rating.raterName} (${rating.raterClass})</td>
+					<td>${rating.scores[0] || '-'}</td>
+					<td>${rating.scores[1] || '-'}</td>
+					<td>${rating.scores[2] || '-'}</td>
+					<td>${rating.scores[3] || '-'}</td>
+					<td>${rating.scores[4] || '-'}</td>
+					<td>${rating.scores[5] || '-'}</td>
+					<td><strong>${rating.avg.toFixed(2)}</strong></td>
+				</tr>`;
+				totalSum += rating.sum;
+				totalCount += rating.count;
+			});
+
+			const overallAvg = totalSum / totalCount;
+			html += `<tr style="background: var(--accent-soft); font-weight: 700;">
+				<td>TOTAL / AVERAGE</td>
+				<td colspan="6"></td>
+				<td>${overallAvg.toFixed(2)}</td>
+			</tr>`;
+
+			html += '</tbody></table>';
+
+			html += '<div class="summary-box">';
+			html += `<strong>Calculation:</strong> (${ratings.map(r => `${r.sum}/${r.count}`).join(' + ')}) / ${totalCount} ratings = ${overallAvg.toFixed(2)}`;
+			html += '</div>';
+
+			document.getElementById('modalTitle').textContent = title;
+			document.getElementById('modalBody').innerHTML = html;
+			document.getElementById('detailModal').classList.add('active');
+		}
+
+		function closeDetailModal() {
+			document.getElementById('detailModal').classList.remove('active');
+		}
+
+		// Close modal when clicking outside
+		window.addEventListener('click', (e) => {
+			const modal = document.getElementById('detailModal');
+			if (e.target === modal) {
+				closeDetailModal();
+			}
+		});
+
+		function downloadTableAsCSV() {
+			const search = els.searchInput.value.trim().toUpperCase();
+			let rows = allRows.filter((r) => r.name.includes(search));
+
+			// Apply current sort
+			const sortBy = els.sortSelect.value;
+			rows = rows.sort((a, b) => {
+				if (sortBy === "scoreAsc") return a.avg - b.avg || a.class.localeCompare(b.class) || a.name.localeCompare(b.name);
+				if (sortBy === "nameAsc") return a.name.localeCompare(b.name) || a.class.localeCompare(b.class);
+				if (sortBy === "countDesc") return b.count - a.count || b.avg - a.avg;
+				if (sortBy === "scoreDesc") return b.avg - a.avg || a.class.localeCompare(b.class) || a.name.localeCompare(b.name);
+				return a.class.localeCompare(b.class) || a.name.localeCompare(b.name);
+			});
+
+			// Create CSV
+			let csv = "Class,Student,Average Score,Band,Ratings Count\n";
+			rows.forEach((r) => {
+				const bandName = getBandName(r.avg);
+				csv += `"${r.class}","${r.name}","${r.avg.toFixed(2)}","${bandName}","${r.count}"\n`;
+			});
+
+			// Download
+			const blob = new Blob([csv], { type: "text/csv" });
+			const url = URL.createObjectURL(blob);
+			const link = document.createElement("a");
+			link.href = url;
+			link.download = `participation-scores-${new Date().toISOString().split("T")[0]}.csv`;
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+			URL.revokeObjectURL(url);
+		}
+
+		els.downloadBtn.addEventListener("click", downloadTableAsCSV);
+
+		async function tryFetchText(path) {
+			const res = await fetch(path);
+			if (!res.ok) throw new Error(String(res.status));
+			return res.text();
+		}
+
+		function tryXhrText(path) {
+			return new Promise((resolve, reject) => {
+				const xhr = new XMLHttpRequest();
+				xhr.open("GET", path, true);
+				xhr.onload = () => {
+					if (xhr.status === 0 || (xhr.status >= 200 && xhr.status < 300)) {
+						resolve(xhr.responseText);
+						return;
+					}
+					reject(new Error(String(xhr.status)));
+				};
+				xhr.onerror = () => reject(new Error("xhr-error"));
+				xhr.send();
+			});
+		}
+
+		function parseXmlToObjects(xmlText) {
+			const parser = new DOMParser();
+			const xmlDoc = parser.parseFromString(xmlText, "application/xml");
+			if (xmlDoc.querySelector("parsererror")) return [];
+
+			const responseNodes = Array.from(xmlDoc.querySelectorAll("responses > response"));
+			if (!responseNodes.length) return [];
+
+			return responseNodes.map((responseNode) => {
+				const obj = {};
+				const fieldNodes = Array.from(responseNode.querySelectorAll("field"));
+				fieldNodes.forEach((fieldNode) => {
+					const name = fieldNode.getAttribute("name") || "";
+					obj[name] = (fieldNode.textContent || "").trim();
+				});
+				return obj;
+			});
+		}
+
+		function applyXmlText(xmlText, sourceLabel) {
+			const objects = parseXmlToObjects(xmlText);
+			if (!objects.length) {
+				els.status.textContent = "Could not find data rows in the XML.";
+				return;
+			}
+
+			const { list, unknownLabels, totalRatingValues } = extractScores(objects);
+			allRows = list;
+			renderKpis(allRows, totalRatingValues);
+			renderTable();
+			renderClassAnalysis();
+
+			els.status.textContent = `Loaded ${sourceLabel}: ${objects.length} responses, ${allRows.length} students.`;
+			els.note.textContent = unknownLabels
+				? `${unknownLabels} rating entries were skipped because their labels were not recognized.`
+				: "All rating labels were recognized.";
+		}
+
+		async function loadDefaultData() {
+			const includedXml = "responses.xml";
+			const includedCsv = INCLUDED_CSV;
+
+			if (typeof EMBEDDED_XML === "string" && EMBEDDED_XML.trim().length > 0) {
+				applyXmlText(EMBEDDED_XML, "Embedded responses.xml");
+				els.status.textContent += " (standalone mode)";
+				return;
+			}
+
+			if (typeof EMBEDDED_CSV === "string" && EMBEDDED_CSV.trim().length > 0) {
+				applyCsvText(EMBEDDED_CSV, "Embedded responses.csv");
+				els.status.textContent += " (standalone mode)";
+				return;
+			}
+
+			try {
+				const xmlText = await tryFetchText(includedXml);
+				applyXmlText(xmlText, includedXml);
+				return;
+			} catch (_fetchXmlErr) {}
+			try {
+				const xmlText = await tryXhrText(includedXml);
+				applyXmlText(xmlText, includedXml);
+				return;
+			} catch (_xhrXmlErr) {}
+
+			try {
+				const csvText = await tryFetchText(includedCsv);
+				applyCsvText(csvText, includedCsv);
+				return;
+			} catch (_fetchCsvErr) {}
+			try {
+				const csvText = await tryXhrText(includedCsv);
+				applyCsvText(csvText, includedCsv);
+				return;
+			} catch (_xhrCsvErr) {
+				els.status.textContent = "Could not auto-load responses.xml or responses.csv due to browser file security. Click 'Load CSV File' to pick a CSV or XML file once.";
+			}
+		}
+
+		// Allow users to load either CSV or XML files.
+		els.csvFileInput.setAttribute("accept", ".csv,.xml,text/csv,application/xml,text/xml");
+		els.csvFileInput.addEventListener("change", async (event) => {
+			const file = event.target.files && event.target.files[0];
+			if (!file) return;
+			try {
+				const text = await file.text();
+				const name = (file.name || "").toLowerCase();
+				if (name.endsWith(".xml") || text.trim().startsWith("<")) {
+					applyXmlText(text, file.name);
+				} else {
+					applyCsvText(text, file.name);
+				}
+			} catch (_err) {
+				els.status.textContent = "Could not read the selected file.";
+			}
+		});
+
+		loadDefaultData();
+	</script>
+</body>
+</html>
