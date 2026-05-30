@@ -1,0 +1,1953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tactical Commander - Real-Time War Game</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body {
+      user-select: none;
+      -webkit-user-select: none;
+      overflow: hidden;
+      background-color: #0f172a;
+    }
+    /* Hide scrollbars */
+    ::-webkit-scrollbar {
+      display: none;
+    }
+    /* Custom canvas styling */
+    canvas {
+      image-rendering: pixelated;
+      cursor: crosshair;
+    }
+  </style>
+</head>
+<body class="w-screen h-screen flex flex-col font-sans text-slate-100 relative">
+
+  <!-- Game Over / Victory Overlays -->
+  <div id="game-over-modal" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border-2 border-red-500/30 max-w-md w-full p-8 rounded-2xl shadow-2xl text-center">
+      <div class="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20">
+        <i data-lucide="skull" class="w-8 h-8 animate-bounce"></i>
+      </div>
+      <h2 class="text-3xl font-black uppercase tracking-wider text-red-500 mb-2">Gate Destroyed!</h2>
+      <p class="text-slate-300 text-sm mb-6 leading-relaxed">The allied command keep has fallen to the enemy siege forces. Your defense lines were breached.</p>
+      <button onclick="resetGame()" class="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold uppercase tracking-wider rounded-xl shadow-lg shadow-red-900/30 transition-all">
+        Try Again
+      </button>
+    </div>
+  </div>
+
+  <div id="game-victory-modal" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border-2 border-emerald-500/30 max-w-md w-full p-8 rounded-2xl shadow-2xl text-center">
+      <div class="w-16 h-16 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-500/20">
+        <i data-lucide="crown" class="w-8 h-8 animate-pulse"></i>
+      </div>
+      <h2 class="text-3xl font-black uppercase tracking-wider text-emerald-400 mb-2">Victory Declared!</h2>
+      <p class="text-slate-300 text-sm mb-6 leading-relaxed">Excellent tactics, Commander! You have successfully sieged and demolished the enemy gatehouse outpost.</p>
+      <button onclick="resetGame()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold uppercase tracking-wider rounded-xl shadow-lg shadow-emerald-900/30 transition-all">
+        Start New Campaign
+      </button>
+    </div>
+  </div>
+
+  <!-- Top Navigation & Status Bar -->
+  <header class="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between z-10">
+    <div class="flex items-center space-x-3">
+      <div class="p-2 bg-amber-500/10 text-amber-500 rounded-lg border border-amber-500/30">
+        <i data-lucide="shield" class="w-6 h-6 animate-pulse"></i>
+      </div>
+      <div>
+        <h1 class="text-lg font-black tracking-wider uppercase text-amber-400">Tactical Commander</h1>
+        <p class="text-xs text-slate-400 font-medium">Real-Time Battle Prototype</p>
+      </div>
+    </div>
+
+    <!-- Live Game Stats Dashboard -->
+    <div class="flex items-center space-x-6 bg-slate-950/80 px-4 py-2 rounded-xl border border-slate-800">
+      <!-- Allied Gold / Resource -->
+      <div class="flex items-center space-x-2">
+        <div class="bg-yellow-500/10 p-1.5 rounded text-yellow-500">
+          <i data-lucide="coins" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Allied Gold</div>
+          <div class="text-lg font-bold text-yellow-400" id="resource-counter">150 <span class="text-xs text-green-400 font-normal">+15/s</span></div>
+        </div>
+      </div>
+
+      <!-- Enemy Gold / Resource -->
+      <div class="flex items-center space-x-2 border-l border-slate-800 pl-6">
+        <div class="bg-red-500/10 p-1.5 rounded text-red-400">
+          <i data-lucide="coins" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Enemy Gold</div>
+          <div class="text-lg font-bold text-red-400" id="enemy-resource-counter">150 <span class="text-xs text-red-400 font-normal">+15/s</span></div>
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <div class="h-8 w-px bg-slate-800"></div>
+
+      <!-- Troop Counts -->
+      <div class="flex items-center space-x-2">
+        <div class="bg-blue-500/10 p-1.5 rounded text-blue-400">
+          <i data-lucide="users" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Our Troops</div>
+          <div class="text-lg font-bold text-blue-400" id="ally-counter">0</div>
+        </div>
+      </div>
+
+      <!-- Enemies Defeated -->
+      <div class="flex items-center space-x-2">
+        <div class="bg-red-500/10 p-1.5 rounded text-red-500">
+          <i data-lucide="swords" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Enemies Defeated</div>
+          <div class="text-lg font-bold text-red-500" id="defeat-counter">0</div>
+        </div>
+      </div>
+
+      <!-- Wave Indicator -->
+      <div class="flex items-center space-x-2">
+        <div class="bg-purple-500/10 p-1.5 rounded text-purple-400">
+          <i data-lucide="skull" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Next Wave Boost</div>
+          <div class="text-sm font-bold text-purple-400" id="wave-timer">30s</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Help, Assembly & Manual Modals Trigger -->
+    <div class="flex space-x-2">
+      <button id="btn-set-assembly" onclick="toggleSetAssemblyMode()" class="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-xs text-white font-semibold rounded-lg flex items-center gap-1.5 transition border border-sky-500/30">
+        <i data-lucide="flag" class="w-4 h-4"></i> Set Rally Point
+      </button>
+      <button onclick="toggleHowToPlay()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 font-semibold rounded-lg flex items-center gap-1.5 transition border border-slate-700">
+        <i data-lucide="help-circle" class="w-4 h-4"></i> Instructions
+      </button>
+      <button onclick="resetGame()" class="px-3 py-1.5 bg-red-950/40 hover:bg-red-900/50 text-xs text-red-400 font-semibold rounded-lg flex items-center gap-1.5 transition border border-red-900/30">
+        <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Restart
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Game Workspace -->
+  <main class="flex-1 flex overflow-hidden relative">
+
+    <!-- Play/Sim Area (Left Wide Column) -->
+    <section class="flex-1 relative flex flex-col bg-slate-950">
+      <!-- Gameplay Status Banner / Dynamic Alerts -->
+      <div id="battle-alert" class="absolute top-4 left-1/2 transform -translate-x-1/2 bg-red-500/90 text-white text-xs font-bold uppercase tracking-widest px-4 py-2 rounded-full shadow-lg z-10 flex items-center gap-2 opacity-0 pointer-events-none transition-opacity duration-300">
+        <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+        <span id="alert-text">Enemy Wave Incoming!</span>
+      </div>
+
+      <!-- Floating Selection Quick Action Panel (appears when elements are selected) -->
+      <div id="selection-panel" class="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-slate-900/95 border border-amber-500/50 px-6 py-3 rounded-2xl shadow-2xl z-10 flex items-center space-x-6 backdrop-blur-md opacity-0 pointer-events-none transition-all duration-200 translate-y-2">
+        <div class="flex flex-col min-w-[130px]">
+          <span class="text-[10px] text-amber-500 font-black uppercase tracking-wider">Selected Troops</span>
+          <span class="text-sm font-bold text-white mb-1 animate-pulse" id="selection-count">0 Soldiers</span>
+          <!-- Sub-selection Filter Container -->
+          <div id="selection-filters" class="flex gap-1.5 mt-1 flex-wrap max-w-[280px]"></div>
+        </div>
+
+        <div class="h-6 w-px bg-slate-800"></div>
+
+        <!-- Behaviours -->
+        <div class="flex items-center space-x-1">
+          <span class="text-xs text-slate-400 font-semibold mr-2">Orders:</span>
+          <button onclick="setBehavior('charge')" id="btn-behavior-charge" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-xs font-extrabold text-white rounded-lg flex items-center gap-1 shadow-md hover:scale-105 transition-all">
+            <i data-lucide="flame" class="w-3.5 h-3.5"></i> Charge
+          </button>
+          <button onclick="setBehavior('move')" id="btn-behavior-move" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-xs font-extrabold text-white rounded-lg flex items-center gap-1 shadow-md hover:scale-105 transition-all">
+            <i data-lucide="navigation" class="w-3.5 h-3.5"></i> Move
+          </button>
+          <button onclick="setBehavior('defend')" id="btn-behavior-defend" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-xs font-extrabold text-white rounded-lg flex items-center gap-1 shadow-md hover:scale-105 transition-all">
+            <i data-lucide="shield" class="w-3.5 h-3.5"></i> Defend
+          </button>
+        </div>
+
+        <div class="h-6 w-px bg-slate-800"></div>
+
+        <!-- Formations -->
+        <div class="flex items-center space-x-1">
+          <span class="text-xs text-slate-400 font-semibold mr-2">Formation:</span>
+          <button onclick="applyFormation('line')" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 font-semibold rounded-lg border border-slate-700 hover:border-slate-600 flex items-center gap-1 transition">
+            <i data-lucide="grip-horizontal" class="w-3.5 h-3.5"></i> Line
+          </button>
+          <button onclick="applyFormation('wedge')" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 font-semibold rounded-lg border border-slate-700 hover:border-slate-600 flex items-center gap-1 transition">
+            <i data-lucide="triangle" class="w-3.5 h-3.5"></i> V-Shape
+          </button>
+          <button onclick="applyFormation('box')" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 font-semibold rounded-lg border border-slate-700 hover:border-slate-600 flex items-center gap-1 transition">
+            <i data-lucide="square" class="w-3.5 h-3.5"></i> Box
+          </button>
+        </div>
+      </div>
+
+      <!-- Interactive Map Instructions -->
+      <div class="absolute top-4 left-4 bg-slate-900/80 border border-slate-800 px-3 py-2 rounded-lg pointer-events-none text-[11px] text-slate-400 leading-relaxed max-w-xs backdrop-blur-sm shadow-md z-10">
+        <strong class="text-slate-200 block mb-1">🎮 Control Guide & Objectives:</strong>
+        • Attack the <strong class="text-red-400">Enemy Gate</strong> at the right camp.<br>
+        • Safeguard your <strong class="text-sky-400">Allied Gate</strong> on the left.<br>
+        • <strong class="text-amber-400">Left-Click & Drag</strong> to Box-select troops.<br>
+        • <strong class="text-amber-400">Right-Click</strong> to command troops to move.<br>
+        • <strong class="text-emerald-400">Defend Orders (E)</strong> arranges: Calvary ➔ Swordsmen ➔ Spearmen ➔ Archers.
+      </div>
+
+      <!-- Canvas Rendering Context -->
+      <canvas id="game-canvas" class="w-full h-full flex-1"></canvas>
+    </section>
+
+    <!-- Sidebar Control Center (Right Column) -->
+    <aside class="w-80 bg-slate-900 border-l border-slate-800 flex flex-col overflow-y-auto">
+      
+      <!-- Barracks / Recruit Section -->
+      <div class="p-4 flex-1">
+        <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-3">
+          <i data-lucide="user-plus" class="w-4 h-4 text-amber-500"></i> Deploy Recruits
+        </h2>
+        
+        <div class="space-y-2">
+          <!-- Swordsman -->
+          <button onclick="buyTroop('swordsman')" id="buy-swordsman" class="w-full bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-amber-500/50 p-2.5 rounded-xl flex items-center justify-between group transition">
+            <div class="flex items-center space-x-2.5">
+              <div class="w-9 h-9 bg-amber-500/10 rounded-lg flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform">
+                <i data-lucide="swords" class="w-5 h-5"></i>
+              </div>
+              <div class="text-left">
+                <div class="text-xs font-bold text-slate-200">Swordsman</div>
+                <div class="text-[10px] text-slate-400">Sturdy melee fighter</div>
+              </div>
+            </div>
+            <div class="text-right">
+              <span class="px-2 py-1 bg-yellow-500/15 text-yellow-400 font-extrabold text-xs rounded-md border border-yellow-500/20">💰 50</span>
+            </div>
+          </button>
+
+          <!-- Archer -->
+          <button onclick="buyTroop('archer')" id="buy-archer" class="w-full bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-green-500/50 p-2.5 rounded-xl flex items-center justify-between group transition">
+            <div class="flex items-center space-x-2.5">
+              <div class="w-9 h-9 bg-green-500/10 rounded-lg flex items-center justify-center text-green-400 group-hover:scale-110 transition-transform">
+                <i data-lucide="crosshair" class="w-5 h-5"></i>
+              </div>
+              <div class="text-left">
+                <div class="text-xs font-bold text-slate-200">Archer</div>
+                <div class="text-[10px] text-slate-400">Ranged damage dealer</div>
+              </div>
+            </div>
+            <div class="text-right">
+              <span class="px-2 py-1 bg-yellow-500/15 text-yellow-400 font-extrabold text-xs rounded-md border border-yellow-500/20">💰 60</span>
+            </div>
+          </button>
+
+          <!-- Cavalry -->
+          <button onclick="buyTroop('cavalry')" id="buy-cavalry" class="w-full bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-purple-500/50 p-2.5 rounded-xl flex items-center justify-between group transition">
+            <div class="flex items-center space-x-2.5">
+              <div class="w-9 h-9 bg-purple-500/10 rounded-lg flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform">
+                <i data-lucide="zap" class="w-5 h-5"></i>
+              </div>
+              <div class="text-left">
+                <div class="text-xs font-bold text-slate-200">Cavalry</div>
+                <div class="text-[10px] text-slate-400">Ultra fast flanker</div>
+              </div>
+            </div>
+            <div class="text-right">
+              <span class="px-2 py-1 bg-yellow-500/15 text-yellow-400 font-extrabold text-xs rounded-md border border-yellow-500/20">💰 90</span>
+            </div>
+          </button>
+
+          <!-- Spearmen -->
+          <button onclick="buyTroop('spearman')" id="buy-spearman" class="w-full bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-blue-500/50 p-2.5 rounded-xl flex items-center justify-between group transition">
+            <div class="flex items-center space-x-2.5">
+              <div class="w-9 h-9 bg-blue-500/10 rounded-lg flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+                <i data-lucide="chevrons-up" class="w-5 h-5"></i>
+              </div>
+              <div class="text-left">
+                <div class="text-xs font-bold text-slate-200">Spearman</div>
+                <div class="text-[10px] text-slate-400">Counters Cavalry</div>
+              </div>
+            </div>
+            <div class="text-right">
+              <span class="px-2 py-1 bg-yellow-500/15 text-yellow-400 font-extrabold text-xs rounded-md border border-yellow-500/20">💰 55</span>
+            </div>
+          </button>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- How to Play Modal Overlay -->
+  <div id="how-to-play-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl shadow-2xl p-6 relative">
+      <button onclick="toggleHowToPlay()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-200">
+        <i data-lucide="x" class="w-6 h-6"></i>
+      </button>
+
+      <div class="flex items-center space-x-3 mb-4">
+        <div class="p-2 bg-amber-500/10 text-amber-500 rounded-lg">
+          <i data-lucide="book-open" class="w-6 h-6"></i>
+        </div>
+        <h2 class="text-xl font-bold text-white">How To Commander</h2>
+      </div>
+
+      <div class="space-y-4 text-sm text-slate-300 leading-relaxed max-h-[70vh] overflow-y-auto pr-2">
+        <p>Welcome to <strong>Tactical Commander</strong>! You are in command of an elite brigade tasked with defending the western lines from constant aggressive waves of enemy forces approaching from the east.</p>
+        
+        <div>
+          <h3 class="font-bold text-amber-400 mb-1">🛡️ The Core Symmetrical Economy:</h3>
+          <ul class="list-disc pl-5 space-y-1">
+            <li>Your treasury generates resources automatically every second.</li>
+            <li><strong>Fair Play</strong>: The enemy generates resources at the exact same rate (+15 gold/sec) and is constrained by the exact same recruitment costs!</li>
+            <li>Enemies spend their gold to deploy counter-brigades matching your troop tiers and advance across the map.</li>
+          </ul>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-amber-400 mb-1">⚔️ Formations and Ordering Layouts:</h3>
+          <ul class="list-disc pl-5 space-y-1">
+            <li><strong>Line Formation (1)</strong>: Layers vertical ranks abreast facing the gates in the order: Cavalry ➔ Swordsmen ➔ Spearmen ➔ Archers.</li>
+            <li><strong>V-Shape Formation (2)</strong>: Creates a tactical charging wedge where the strongest apex leads forward.</li>
+            <li><strong>Box Formation (3)</strong>: Forms a defensive hollow wall structure keeping all vulnerable Archers safe inside the center.</li>
+          </ul>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-amber-400 mb-1">🎮 Tactical Combat Controls:</h3>
+          <ul class="list-disc pl-5 space-y-1">
+            <li><strong>Box-Selecting</strong>: Hold left-click on the map and drag your mouse to create a selection box.</li>
+            <li><strong>Shift+Click</strong>: Hold <kbd class="px-1.5 py-0.5 bg-slate-800 text-xs text-white rounded">Shift</kbd> and tap individual soldiers to select/deselect them.</li>
+            <li><strong>Right-Clicking</strong>: Select units, then right-click on the map to issue custom movement destinations.</li>
+          </ul>
+        </div>
+      </div>
+
+      <button onclick="toggleHowToPlay()" class="mt-6 w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold uppercase tracking-wider rounded-xl transition">
+        Let's Battle!
+      </button>
+    </div>
+  </div>
+
+  <!-- Script logic implementation -->
+  <script>
+    // System Config & Global States
+    const canvas = document.getElementById('game-canvas');
+    const ctx = canvas.getContext('2d');
+
+    let resources = 150;
+    let enemyResources = 150; // Symmetrical enemy starting gold
+    const resourcePerSecond = 15;
+    
+    let allies = [];
+    let enemies = [];
+    let projectiles = [];
+    let effects = [];
+    let enemiesDefeated = 0;
+    
+    // Fortress Gate / Camp health stats (The "Life Lines")
+    const maxGateHp = 1000;
+    let allyGateHp = 1000;
+    let enemyGateHp = 1000;
+    let gameFinished = false;
+
+    // Selection Drag Variables
+    let isDragging = false;
+    let selectionStart = { x: 0, y: 0 };
+    let selectionEnd = { x: 0, y: 0 };
+    let selectedAllies = [];
+
+    // Rally / Assembly Point State
+    let assemblyPoint = null;
+    let settingAssembly = false;
+
+    // Wave Control (30-second initial peace time to form army)
+    let nextWaveTime = 30; 
+    let waveCounter = 1;
+
+    // Unit Archetypes configurations (Slower Speeds - Reduced even further for tactical movement)
+    const UNIT_TYPES = {
+      swordsman: {
+        cost: 50,
+        hp: 120,
+        speed: 0.4,     
+        damage: 15,
+        range: 20,
+        cooldown: 50,
+        color: '#f59e0b', // Amber
+        size: 9
+      },
+      archer: {
+        cost: 60,
+        hp: 75,
+        speed: 0.35,    
+        damage: 8,
+        range: 150,
+        cooldown: 80,
+        color: '#10b981', // Green
+        size: 8
+      },
+      cavalry: {
+        cost: 90,
+        hp: 150,
+        speed: 0.7,     
+        damage: 22,
+        range: 25,
+        cooldown: 60,
+        color: '#a855f7', // Purple
+        size: 11
+      },
+      spearman: {
+        cost: 55,
+        hp: 100,        
+        speed: 0.38,    
+        damage: 10,     
+        range: 22,      // Shortened range as requested
+        cooldown: 55,
+        color: '#3b82f6', // Blue
+        size: 9
+      }
+    };
+
+    // Enemy counterpart color mappings for visual symmetry
+    const ENEMY_COLORS = {
+      swordsman: '#f87171', // Light Red
+      archer: '#fb7185',    // Rose Red
+      cavalry: '#dc2626',   // Heavy Crimson Red
+      spearman: '#f43f5e'   // Vivid Pinkish Red
+    };
+
+    // Enemy Spawn Pools mirroring the same active class keys as player troops
+    const ENEMY_TYPES = ['swordsman', 'archer', 'cavalry', 'spearman'];
+
+    // Global variable for pulsing/ambient animations
+    let systemPulse = 0;
+
+    // Initialize Canvas Dimensions on load and resize
+    function resizeCanvas() {
+      const containerRect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = containerRect.width;
+      canvas.height = containerRect.height;
+    }
+
+    // Toggle Placement of Assembly Point
+    function toggleSetAssemblyMode() {
+      if (gameFinished) return;
+      settingAssembly = !settingAssembly;
+      const btn = document.getElementById('btn-set-assembly');
+      if (settingAssembly) {
+        btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
+        btn.classList.add('bg-emerald-600', 'hover:bg-emerald-500', 'animate-pulse');
+        btn.innerHTML = '<i data-lucide="crosshair" class="w-4 h-4"></i> Click Map...';
+        triggerFeedbackAlert("Click anywhere on the battlefield to set the Rally Point!");
+      } else {
+        btn.classList.add('bg-sky-600', 'hover:bg-sky-500');
+        btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-500', 'animate-pulse');
+        btn.innerHTML = '<i data-lucide="flag" class="w-4 h-4"></i> Set Rally Point';
+      }
+      lucide.createIcons();
+    }
+
+    // Soldier Class
+    class Soldier {
+      constructor(type, x, y, side = 'ally') {
+        this.type = type;
+        this.side = side;
+        this.x = x;
+        this.y = y;
+        
+        // Allied default behavior: March to Assembly Point if set, else march straight to Enemy gate
+        this.targetX = side === 'ally' ? (assemblyPoint ? assemblyPoint.x : (canvas.width ? canvas.width - 120 : 1200)) : 120;
+        this.targetY = side === 'ally' ? (assemblyPoint ? assemblyPoint.y : y) : y;
+        this.behavior = side === 'ally' ? (assemblyPoint ? 'move' : 'charge') : 'charge'; 
+        
+        // Grab archetype template (Both sides now share identical core stats)
+        const base = UNIT_TYPES[type];
+        
+        this.maxHp = base.hp;
+        this.hp = this.maxHp;
+        this.speed = base.speed;
+        this.damage = base.damage;
+        this.range = base.range;
+        this.cooldown = base.cooldown;
+        
+        // Use custom team colors
+        this.color = side === 'ally' ? base.color : ENEMY_COLORS[type];
+        this.size = base.size;
+        
+        this.attackTimer = 0;
+        this.isSelected = false;
+        this.angle = side === 'ally' ? 0 : Math.PI; // Look towards center of field
+        this.isMoving = false;
+        this.stuckTimer = 0;
+
+        // Custom stats for animations
+        this.wiggle = 0;
+        this.pulse = Math.random() * Math.PI;
+      }
+
+      update() {
+        if (this.attackTimer > 0) this.attackTimer--;
+
+        let destinationX = this.targetX;
+        let destinationY = this.targetY;
+        let wantsToMove = true;
+
+        // Check if there are active hostile units
+        const target = this.findNearestEnemy();
+
+        if (this.behavior === 'charge') {
+          if (target) {
+            // Chase and attack the nearest enemy unit
+            const dist = this.getDistanceTo(target.x, target.y);
+            const reachRange = (this.type === 'archer') ? this.range : (this.range + this.size + target.size);
+            
+            if (dist <= reachRange) {
+              wantsToMove = false;
+              this.angle = Math.atan2(target.y - this.y, target.x - this.x);
+              this.executeAttack(target);
+            } else {
+              destinationX = target.x;
+              destinationY = target.y;
+            }
+          } else {
+            // NO enemy units left in sight: attack the opposing camps/gates directly!
+            if (this.side === 'ally') {
+              const distToEnemyGate = Math.abs((canvas.width - 120) - this.x);
+              // Lock onto and attack the Gate if close enough
+              if (distToEnemyGate <= this.range + 10) {
+                wantsToMove = false;
+                this.angle = 0; // Look East (directly at the gate)
+                this.executeGateAttack();
+              } else {
+                // March to the Enemy Gate house
+                destinationX = canvas.width - 120;
+                destinationY = canvas.height / 2;
+              }
+            } else {
+              // Enemy unit targeting the Allied Gate
+              const distToAllyGate = Math.abs(this.x - 120);
+              if (distToAllyGate <= this.range + 10) {
+                wantsToMove = false;
+                this.angle = Math.PI; // Look West (directly at the gate)
+                this.executeGateAttack();
+              } else {
+                // March to the Allied Gate house
+                destinationX = 120;
+                destinationY = canvas.height / 2;
+              }
+            }
+          }
+        } 
+        else if (this.behavior === 'defend') {
+          // Stay strictly on position (destination is targetX, targetY)
+          // If there's an enemy unit within range, attack them from the spot (don't chase)
+          if (target) {
+            const dist = this.getDistanceTo(target.x, target.y);
+            const reachRange = (this.type === 'archer') ? this.range : (this.range + this.size + target.size);
+            if (dist <= reachRange) {
+              this.angle = Math.atan2(target.y - this.y, target.x - this.x);
+              this.executeAttack(target);
+            }
+          }
+          destinationX = this.targetX;
+          destinationY = this.targetY;
+        } 
+        else if (this.behavior === 'move') {
+          // March reliably to user-specified destination targetX, targetY
+          // If an enemy is encountered along the way, hit them but do NOT change direction or chase them
+          if (target) {
+            const dist = this.getDistanceTo(target.x, target.y);
+            const reachRange = (this.type === 'archer') ? this.range : (this.range + this.size + target.size);
+            if (dist <= reachRange) {
+              this.angle = Math.atan2(target.y - this.y, target.x - this.x);
+              this.executeAttack(target);
+              // Stop temporarily to strike, unless it's fast cavalry
+              if (this.type !== 'cavalry') {
+                wantsToMove = false;
+              }
+            }
+          }
+          destinationX = this.targetX;
+          destinationY = this.targetY;
+          
+          // Check if we reached our destination
+          const distToTarget = this.getDistanceTo(this.targetX, this.targetY);
+          if (distToTarget <= 8) {
+            this.isMoving = false;
+          }
+        }
+
+        // Standard movement routine
+        if (wantsToMove) {
+          const dx = destinationX - this.x;
+          const dy = destinationY - this.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance > 4) {
+            this.angle = Math.atan2(dy, dx);
+            
+            let moveSpeed = this.speed;
+            if (this.behavior === 'defend') moveSpeed *= 0.5;
+
+            this.x += Math.cos(this.angle) * moveSpeed;
+            this.y += Math.sin(this.angle) * moveSpeed;
+            this.isMoving = true;
+            this.wiggle += 0.08; 
+
+            // Hard boundary constraints mapping the open field
+            this.x = Math.max(120, Math.min(canvas.width - 120, this.x));
+            this.y = Math.max(this.size + 15, Math.min(canvas.height - this.size - 15, this.y));
+          } else {
+            this.isMoving = false;
+          }
+        } else {
+          this.isMoving = false;
+        }
+
+        this.pulse += 0.05;
+      }
+
+      getDistanceTo(x, y) {
+        const dx = x - this.x;
+        const dy = y - this.y;
+        return Math.sqrt(dx * dx + dy * dy);
+      }
+
+      findNearestEnemy() {
+        const opposingList = this.side === 'ally' ? enemies : allies;
+        if (opposingList.length === 0) return null;
+
+        let closest = null;
+        let minDistance = Infinity;
+
+        // If 'defend' is set, restrict targeting radius
+        const maxDetectionDist = this.behavior === 'defend' ? 180 : Infinity;
+
+        for (let unit of opposingList) {
+          const d = this.getDistanceTo(unit.x, unit.y);
+          if (d < minDistance && d <= maxDetectionDist) {
+            minDistance = d;
+            closest = unit;
+          }
+        }
+        return closest;
+      }
+
+      executeAttack(target) {
+        if (this.attackTimer > 0) return;
+
+        this.attackTimer = this.cooldown;
+
+        // ONLY Archers and Enemy Range archetypes can fire projectiles
+        if (this.type === 'archer') {
+          projectiles.push(new Projectile(this.x, this.y, target, this.damage, this.side));
+        } else {
+          // Spearmen, Swordsmen, and Cavalry execute strict close-combat attacks
+          let meleeDamage = this.damage;
+          
+          if (this.type === 'spearman' && target.type === 'cavalry') {
+            meleeDamage *= 1.5; // Balanced anti-cavalry multiplier
+            spawnEffect(target.x, target.y, '#3b82f6', 15);
+          } else if (this.type === 'cavalry' && target.type === 'spearman') {
+            meleeDamage *= 0.5;
+            this.hp -= 5;
+            spawnEffect(this.x, this.y, '#f43f5e', 8);
+          }
+
+          target.receiveDamage(meleeDamage);
+          spawnEffect(target.x, target.y, this.color, 6);
+        }
+      }
+
+      // Attack the gatehouse structures directly
+      executeGateAttack() {
+        if (this.attackTimer > 0) return;
+        this.attackTimer = this.cooldown;
+
+        let strikeDamage = this.damage;
+
+        if (this.side === 'ally') {
+          enemyGateHp = Math.max(0, enemyGateHp - strikeDamage);
+          spawnEffect(canvas.width - 110, canvas.height / 2, '#38bdf8', 10);
+          
+          // Siege text effect
+          effects.push({
+            type: 'text',
+            text: `🎯 GATE -${Math.round(strikeDamage)}`,
+            x: canvas.width - 120 + (Math.random() * 20 - 10),
+            y: (canvas.height / 2) + (Math.random() * 40 - 20),
+            duration: 45,
+            color: '#38bdf8'
+          });
+        } else {
+          allyGateHp = Math.max(0, allyGateHp - strikeDamage);
+          spawnEffect(110, canvas.height / 2, '#f43f5e', 10);
+
+          effects.push({
+            type: 'text',
+            text: `💥 GATE -${Math.round(strikeDamage)}`,
+            x: 120 + (Math.random() * 20 - 10),
+            y: (canvas.height / 2) + (Math.random() * 40 - 20),
+            duration: 45,
+            color: '#f43f5e'
+          });
+        }
+      }
+
+      receiveDamage(amount) {
+        let finalDamage = amount;
+        if (this.behavior === 'defend') {
+          finalDamage *= 0.75; 
+        }
+
+        this.hp -= finalDamage;
+        effects.push({
+          type: 'text',
+          text: `-${Math.round(finalDamage)}`,
+          x: this.x + (Math.random() * 12 - 6),
+          y: this.y - 12,
+          duration: 30,
+          color: this.side === 'ally' ? '#ef4444' : '#ffffff'
+        });
+      }
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+
+        // Selection rings
+        if (this.isSelected && this.side === 'ally') {
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(0, 0, this.size + 4, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          ctx.arc(0, 0, this.size + 7, this.pulse, this.pulse + Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        let bounce = this.isMoving ? Math.sin(this.wiggle) * 1.5 : 0;
+
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.beginPath();
+        ctx.arc(0, 4, this.size - 1, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 1. HORSE DETAILS (Cavalry)
+        const isCavalry = this.type === 'cavalry';
+        if (isCavalry) {
+          ctx.fillStyle = this.side === 'ally' ? '#78350f' : '#451a03';
+          
+          // Horse Body: Oval shape
+          ctx.beginPath();
+          ctx.ellipse(0, bounce, 15, 6, 0, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Horse Head: Triangle in front pointing forward (East/Positive X-axis)
+          ctx.beginPath();
+          ctx.moveTo(12, bounce - 5);
+          ctx.lineTo(22, bounce);
+          ctx.lineTo(12, bounce + 5);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        // 2. UNIT CORE (Circle in the middle)
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(0, bounce, this.size, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = this.side === 'ally' ? '#1e293b' : '#450a0a';
+        ctx.beginPath();
+        ctx.arc(-1, bounce, this.size - 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 3. EQUIPMENT
+        ctx.fillStyle = '#94a3b8';
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 1.5;
+
+        const uType = this.type;
+
+        if (this.type === 'swordsman') {
+          ctx.beginPath();
+          ctx.moveTo(5, bounce - 2);
+          ctx.lineTo(13, bounce - 4);
+          ctx.stroke();
+
+          ctx.fillStyle = '#b45309';
+          ctx.beginPath();
+          ctx.arc(2, bounce + 5, 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#e2e8f0';
+          ctx.beginPath();
+          ctx.arc(2, bounce + 5, 2, 0, Math.PI * 2);
+          ctx.fill();
+        } 
+        else if (uType === 'archer') {
+          ctx.strokeStyle = '#b45309';
+          ctx.beginPath();
+          ctx.arc(5, bounce, 6, -Math.PI / 3, Math.PI / 3);
+          ctx.stroke();
+          ctx.strokeStyle = '#e2e8f0';
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(5, bounce - 5);
+          ctx.lineTo(5, bounce + 5);
+          ctx.stroke();
+        } 
+        else if (uType === 'spearman') {
+          ctx.strokeStyle = '#64748b';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(-4, bounce - 5);
+          ctx.lineTo(14, bounce - 5); 
+          ctx.stroke();
+          ctx.fillStyle = '#cbd5e1';
+          ctx.beginPath();
+          ctx.moveTo(14, bounce - 6);
+          ctx.lineTo(18, bounce - 5); 
+          ctx.lineTo(14, bounce - 4);
+          ctx.fill();
+        } 
+
+        ctx.fillStyle = '#cbd5e1';
+        ctx.beginPath();
+        ctx.arc(2, bounce, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = this.side === 'ally' ? '#60a5fa' : '#ef4444';
+        ctx.fillRect(3, bounce - 1.5, 2, 1);
+
+        ctx.restore();
+
+        // Draw Health Bar
+        if (this.hp < this.maxHp) {
+          const barWidth = this.size * 2;
+          const barHeight = 3;
+          const hpPct = Math.max(0, this.hp / this.maxHp);
+          
+          ctx.fillStyle = '#ef4444';
+          ctx.fillRect(this.x - barWidth / 2, this.y - this.size - 8, barWidth, barHeight);
+          ctx.fillStyle = '#10b981';
+          ctx.fillRect(this.x - barWidth / 2, this.y - this.size - 8, barWidth * hpPct, barHeight);
+        }
+
+        if (this.isSelected && this.side === 'ally') {
+          ctx.fillStyle = this.behavior === 'charge' ? '#ef4444' : this.behavior === 'defend' ? '#10b981' : '#3b82f6';
+          ctx.font = '8px sans-serif';
+          ctx.fillText(this.behavior.toUpperCase()[0], this.x - 3, this.y - this.size - 12);
+        }
+      }
+    }
+
+    // Projectile Class
+    class Projectile {
+      constructor(startX, startY, target, damage, side) {
+        this.x = startX;
+        this.y = startY;
+        this.target = target;
+        this.damage = damage;
+        this.side = side;
+        this.speed = 2.5; 
+        this.alive = true;
+
+        const dx = target.x - this.x;
+        const dy = target.y - this.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        this.vx = (dx / dist) * this.speed;
+        this.vy = (dy / dist) * this.speed;
+        this.angle = Math.atan2(dy, dx);
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+
+        const opposingList = this.side === 'ally' ? enemies : allies;
+        for (let unit of opposingList) {
+          const dx = unit.x - this.x;
+          const dy = unit.y - this.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist <= unit.size + 4) {
+            unit.receiveDamage(this.damage);
+            this.alive = false;
+            spawnEffect(this.x, this.y, '#f59e0b', 4);
+            return;
+          }
+        }
+
+        if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+          this.alive = false;
+        }
+      }
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+
+        ctx.strokeStyle = '#b45309';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-6, 0);
+        ctx.lineTo(6, 0);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.beginPath();
+        ctx.moveTo(-6, -2);
+        ctx.lineTo(-4, 0);
+        ctx.lineTo(-6, 2);
+        ctx.stroke();
+
+        ctx.restore();
+      }
+    }
+
+    // Spawning Auxiliary Effects
+    function spawnEffect(x, y, color, particleCount = 8) {
+      for (let i = 0; i < particleCount; i++) {
+        effects.push({
+          type: 'spark',
+          x: x,
+          y: y,
+          vx: (Math.random() - 0.5) * 3,
+          vy: (Math.random() - 0.5) * 3,
+          size: Math.random() * 2 + 1,
+          duration: 20 + Math.random() * 15,
+          color: color
+        });
+      }
+    }
+
+    // Buy / Spawn Allies Handler
+    function buyTroop(type) {
+      if (gameFinished) return;
+      const config = UNIT_TYPES[type];
+      if (!config) return;
+
+      if (resources >= config.cost) {
+        resources -= config.cost;
+        updateUI();
+
+        const spawnX = 130 + (Math.random() * 20);
+        const spawnY = (canvas.height / 2) + (Math.random() * 100 - 50);
+        
+        const newSoldier = new Soldier(type, spawnX, spawnY, 'ally');
+        allies.push(newSoldier);
+
+        // If assembly point is set, direct the new recruit to march there first
+        if (assemblyPoint) {
+          newSoldier.targetX = assemblyPoint.x;
+          newSoldier.targetY = assemblyPoint.y;
+          newSoldier.behavior = 'move';
+        }
+
+        spawnEffect(spawnX, spawnY, config.color, 15);
+      } else {
+        triggerFeedbackAlert("Not enough resources!");
+      }
+    }
+
+    // Filters down current selections to only contain specified soldier type
+    function filterSelection(type) {
+      allies.forEach(u => {
+        if (u.isSelected && u.type !== type) {
+          u.isSelected = false;
+        }
+      });
+      selectedAllies = allies.filter(u => u.isSelected);
+      updateUI();
+      triggerFeedbackAlert(`Commanding only ${type.toUpperCase()}s!`);
+    }
+
+    // Selection controls & UI panel triggers
+    function setBehavior(behavior) {
+      if (selectedAllies.length === 0) return;
+
+      if (behavior === 'defend') {
+        // DEFENSIVE FORMATION TIERING (Front-To-Back):
+        // Default: Cavalry (Front/Right) -> Swordsmen -> Spearmen -> Archers (Rear/Left)
+        // Group troops by their categories
+        const cavalryGroup = selectedAllies.filter(u => u.type === 'cavalry');
+        const swordsmenGroup = selectedAllies.filter(u => u.type === 'swordsman');
+        const spearmenGroup = selectedAllies.filter(u => u.type === 'spearman');
+        const archersGroup = selectedAllies.filter(u => u.type === 'archer');
+
+        // Find average focal centroid coordinates of selected defenders
+        let centerX = 0;
+        let centerY = 0;
+        selectedAllies.forEach(unit => {
+          centerX += unit.x;
+          centerY += unit.y;
+        });
+        centerX /= selectedAllies.length;
+        centerY /= selectedAllies.length;
+
+        const columnSpacingY = 24; // Vertical spacing between soldiers inside the same tier
+
+        // Tiering configuration: we define their offsets along X-axis relative to the defend point.
+        // Since Allied troops face East (Right), the frontline (vanguard) is furthest to the East.
+        const orderOfTiers = [
+          { group: cavalryGroup, xOffset: 30 },       // Front Vanguard
+          { group: swordsmenGroup, xOffset: 0 },       // Front Guard
+          { group: spearmenGroup, xOffset: -30 },     // Middle Guard
+          { group: archersGroup, xOffset: -65 }       // Protected Rear
+        ];
+
+        orderOfTiers.forEach(tier => {
+          const count = tier.group.length;
+          if (count === 0) return;
+          
+          const totalHeight = (count - 1) * columnSpacingY;
+          const startY = centerY - totalHeight / 2;
+
+          tier.group.forEach((unit, idx) => {
+            unit.targetX = centerX + tier.xOffset;
+            unit.targetY = startY + (idx * columnSpacingY);
+            unit.behavior = 'defend';
+          });
+        });
+
+        triggerFeedbackAlert("Defensive formation layered: Cavalry Front, Archers Rear!");
+      } else {
+        // Standard Behavior assignment
+        selectedAllies.forEach(unit => {
+          unit.behavior = behavior;
+        });
+        triggerFeedbackAlert(`Orders set to ${behavior.toUpperCase()}`);
+      }
+    }
+
+    // Formations Engine
+    function applyFormation(formationType) {
+      if (selectedAllies.length === 0) return;
+
+      let centerX = 0;
+      let centerY = 0;
+      selectedAllies.forEach(unit => {
+        centerX += unit.x;
+        centerY += unit.y;
+      });
+      centerX /= selectedAllies.length;
+      centerY /= selectedAllies.length;
+
+      const spacing = 28; 
+
+      if (formationType === 'line') {
+        // LINE FORMATION TIERING (Abreast Front-to-Back vertical rows facing East/Gates):
+        // Archers are in one line behind Spearmen who are behind Swordsmen who are behind Cavalry
+        const cavalryGroup = selectedAllies.filter(u => u.type === 'cavalry');
+        const swordsmenGroup = selectedAllies.filter(u => u.type === 'swordsman');
+        const spearmenGroup = selectedAllies.filter(u => u.type === 'spearman');
+        const archersGroup = selectedAllies.filter(u => u.type === 'archer');
+
+        // Order of vertical lines along the X axis: Cavalry furthest East, Archers furthest West
+        const tiers = [
+          { group: cavalryGroup, xOffset: 45 },
+          { group: swordsmenGroup, xOffset: 15 },
+          { group: spearmenGroup, xOffset: -15 },
+          { group: archersGroup, xOffset: -45 }
+        ];
+
+        tiers.forEach(tier => {
+          const count = tier.group.length;
+          if (count === 0) return;
+          
+          const totalHeight = (count - 1) * spacing;
+          const startY = centerY - totalHeight / 2;
+
+          tier.group.forEach((unit, idx) => {
+            unit.targetX = centerX + tier.xOffset;
+            unit.targetY = startY + (idx * spacing);
+          });
+        });
+      } 
+      else if (formationType === 'wedge') {
+        // V-SHAPED FORMATION (Apex leading the charge towards East/Enemy Gate):
+        // Apex is the furthest East coordinate. Legs of the V branch back to the West.
+        const count = selectedAllies.length;
+        
+        // Sort troops to put heavier Cavalry/Swordsmen at the leading apex, archers at back
+        const sortedTroops = [...selectedAllies].sort((a, b) => {
+          const priorities = { cavalry: 1, swordsman: 2, spearman: 3, archer: 4 };
+          return priorities[a.type] - priorities[b.type];
+        });
+
+        sortedTroops.forEach((unit, idx) => {
+          if (idx === 0) {
+            // Apex unit (Furthest East)
+            unit.targetX = centerX + (spacing * 1.2);
+            unit.targetY = centerY;
+          } else {
+            // Leg branch calculations
+            const legIndex = Math.floor((idx + 1) / 2); // 1, 1, 2, 2, 3, 3...
+            const sign = idx % 2 === 0 ? 1 : -1; // alternate Y branch side
+            
+            unit.targetX = centerX - (legIndex * spacing * 0.7);
+            unit.targetY = centerY + (legIndex * spacing * 0.8 * sign);
+          }
+        });
+      } 
+      else if (formationType === 'box') {
+        // BOX FORMATION (Archers protected inside, melee units forming hollow box wall):
+        const archersGroup = selectedAllies.filter(u => u.type === 'archer');
+        const meleeGroup = selectedAllies.filter(u => u.type !== 'archer');
+
+        // Define Box Side Dimensions based on melee count
+        const meleeCount = meleeGroup.length;
+        
+        if (meleeCount === 0) {
+          // If only archers exist, draw a normal solid grid box
+          const cols = Math.ceil(Math.sqrt(count));
+          const rows = Math.ceil(count / cols);
+          const totalWidth = (cols - 1) * spacing;
+          const totalHeight = (rows - 1) * spacing;
+          selectedAllies.forEach((unit, idx) => {
+            const col = idx % cols;
+            const row = Math.floor(idx / cols);
+            unit.targetX = centerX - totalWidth / 2 + (col * spacing);
+            unit.targetY = centerY - totalHeight / 2 + (row * spacing);
+          });
+        } else {
+          // Arrange melee units in a hollow square ring
+          // Approximate layout points along perimeter
+          const perimeterPoints = [];
+          const sideCount = Math.ceil((meleeCount + 4) / 4); // units per edge
+          const radius = (sideCount * spacing) / 2;
+
+          // Generate hollow square coordinates
+          // Top row
+          for (let i = 0; i < sideCount; i++) {
+            perimeterPoints.push({
+              x: centerX - radius + (i * spacing),
+              y: centerY - radius
+            });
+          }
+          // Right row
+          for (let i = 1; i < sideCount; i++) {
+            perimeterPoints.push({
+              x: centerX + radius,
+              y: centerY - radius + (i * spacing)
+            });
+          }
+          // Bottom row
+          for (let i = sideCount - 2; i >= 0; i--) {
+            perimeterPoints.push({
+              x: centerX - radius + (i * spacing),
+              y: centerY + radius
+            });
+          }
+          // Left row
+          for (let i = sideCount - 2; i >= 1; i--) {
+            perimeterPoints.push({
+              x: centerX - radius,
+              y: centerY - radius + (i * spacing)
+            });
+          }
+
+          // Map melee troops to perimeter spots
+          meleeGroup.forEach((unit, idx) => {
+            const pt = perimeterPoints[idx % perimeterPoints.length] || { x: centerX, y: centerY };
+            unit.targetX = pt.x;
+            unit.targetY = pt.y;
+          });
+
+          // Protect Archers strictly INSIDE the hollow box center
+          const archerCount = archersGroup.length;
+          if (archerCount > 0) {
+            const innerSpacing = spacing * 0.7;
+            const innerCols = Math.ceil(Math.sqrt(archerCount));
+            const innerRows = Math.ceil(archerCount / innerCols);
+            const totalInnerW = (innerCols - 1) * innerSpacing;
+            const totalInnerH = (innerRows - 1) * innerSpacing;
+
+            archersGroup.forEach((unit, idx) => {
+              const col = idx % innerCols;
+              const row = Math.floor(idx / innerCols);
+              unit.targetX = centerX - totalInnerW / 2 + (col * innerSpacing);
+              unit.targetY = centerY - totalInnerH / 2 + (row * innerSpacing);
+            });
+          }
+        }
+      }
+
+      // Transition to move behavior so troops march to layout targets
+      selectedAllies.forEach(unit => {
+        unit.behavior = 'move';
+      });
+
+      triggerFeedbackAlert(`Tactical Formation applied: ${formationType.toUpperCase()}`);
+    }
+
+    function triggerFeedbackAlert(message) {
+      const banner = document.getElementById('battle-alert');
+      const text = document.getElementById('alert-text');
+      text.innerText = message;
+      banner.style.opacity = '1';
+      
+      if (window.alertTimer) clearTimeout(window.alertTimer);
+      window.alertTimer = setTimeout(() => {
+        banner.style.opacity = '0';
+      }, 3000);
+    }
+
+    function updateUI() {
+      document.getElementById('resource-counter').innerHTML = `${Math.floor(resources)} <span class="text-xs text-green-400 font-normal">+${resourcePerSecond}/s</span>`;
+      document.getElementById('enemy-resource-counter').innerHTML = `${Math.floor(enemyResources)} <span class="text-xs text-red-400 font-normal">+${resourcePerSecond}/s</span>`;
+      
+      document.getElementById('ally-counter').innerText = allies.length;
+      document.getElementById('defeat-counter').innerText = enemiesDefeated;
+      document.getElementById('wave-timer').innerText = `${nextWaveTime}s (Wave ${waveCounter})`;
+
+      Object.keys(UNIT_TYPES).forEach(type => {
+        const cost = UNIT_TYPES[type].cost;
+        const btn = document.getElementById(`buy-${type}`);
+        if (btn) {
+          if (resources < cost) {
+            btn.classList.add('opacity-45', 'cursor-not-allowed');
+          } else {
+            btn.classList.remove('opacity-45', 'cursor-not-allowed');
+          }
+        }
+      });
+
+      const sPanel = document.getElementById('selection-panel');
+      const sCount = document.getElementById('selection-count');
+      const filtersDiv = document.getElementById('selection-filters');
+
+      if (selectedAllies.length > 0) {
+        sPanel.classList.add('opacity-100');
+        sPanel.classList.remove('pointer-events-none', 'translate-y-2');
+        sCount.innerText = `${selectedAllies.length} Soldier${selectedAllies.length > 1 ? 's' : ''}`;
+        
+        // Count selected troop types dynamically
+        const typeCounts = {};
+        selectedAllies.forEach(u => {
+          typeCounts[u.type] = (typeCounts[u.type] || 0) + 1;
+        });
+        
+        const typesPresent = Object.keys(typeCounts);
+        filtersDiv.innerHTML = '';
+        
+        // Symmetrical sub-selection option list. Displays pills only for mixed selections.
+        if (typesPresent.length > 1) {
+          typesPresent.forEach(type => {
+            const btn = document.createElement('button');
+            btn.className = `px-2 py-0.5 text-[9px] font-black uppercase rounded border transition hover:scale-105 active:scale-95 shadow-sm`;
+            
+            let colorClass = 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700';
+            if (type === 'swordsman') colorClass = 'border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20';
+            if (type === 'archer') colorClass = 'border-green-500/40 bg-green-500/10 text-green-400 hover:bg-green-500/20';
+            if (type === 'cavalry') colorClass = 'border-purple-500/40 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20';
+            if (type === 'spearman') colorClass = 'border-blue-500/40 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20';
+
+            btn.className += ' ' + colorClass;
+            btn.innerText = `${type} (${typeCounts[type]})`;
+            btn.onclick = (e) => {
+              e.stopPropagation();
+              filterSelection(type);
+            };
+            filtersDiv.appendChild(btn);
+          });
+        }
+      } else {
+        sPanel.classList.remove('opacity-100');
+        sPanel.classList.add('pointer-events-none', 'translate-y-2');
+        filtersDiv.innerHTML = '';
+      }
+    }
+
+    function toggleHowToPlay() {
+      const modal = document.getElementById('how-to-play-modal');
+      modal.classList.toggle('hidden');
+    }
+
+    // Reset Game completely
+    function resetGame() {
+      resources = 150;
+      enemyResources = 150; // Symmetrical gold reset
+      allies = [];
+      enemies = [];
+      projectiles = [];
+      effects = [];
+      enemiesDefeated = 0;
+      waveCounter = 1;
+      nextWaveTime = 30; // 30 seconds of peace on game start/restart
+      selectedAllies = [];
+      
+      // Reset gate health points
+      allyGateHp = 1000;
+      enemyGateHp = 1000;
+      gameFinished = false;
+
+      // Reset assembly point near allied fortress
+      assemblyPoint = { x: 250, y: canvas.height / 2 || 300 };
+      settingAssembly = false;
+      const btn = document.getElementById('btn-set-assembly');
+      if (btn) {
+        btn.classList.add('bg-sky-600', 'hover:bg-sky-500');
+        btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-500', 'animate-pulse');
+        btn.innerHTML = '<i data-lucide="flag" class="w-4 h-4"></i> Set Rally Point';
+      }
+
+      // Hide Game state modals
+      document.getElementById('game-over-modal').classList.add('hidden');
+      document.getElementById('game-victory-modal').classList.add('hidden');
+
+      // Spawn initial starter squad marching from Allied fortress
+      for (let i = 0; i < 3; i++) {
+        allies.push(new Soldier('swordsman', 130 + (i * 10), (canvas.height/2) - 40 + (i * 40), 'ally'));
+      }
+      allies.push(new Soldier('archer', 125, (canvas.height/2), 'ally'));
+
+      updateUI();
+      triggerFeedbackAlert("30s Preparation Phase Active! Form your army!");
+    }
+
+    // Symmetrical Enemy Recruitment & Wave Logistics
+    // Rather than spawning units for free on a timer, the enemy accumulates gold symmetrically
+    // and purchases corresponding counter units, utilizing tactical intelligence.
+    function handleEnemyAILogic() {
+      if (gameFinished) return;
+
+      // During the initial 30-second peace phase, the enemy also builds gold and spawns a starting squad defensively.
+      // Once peace phase ends, the AI purchases troops strategically as long as they can afford them.
+      let canAffordAndSpawn = true;
+
+      // Limit concurrent enemy size to prevent infinite congestion
+      if (enemies.length >= 25) return;
+
+      // Symmetrical purchase loop based on standard resource pools
+      while (canAffordAndSpawn) {
+        // Assess which unit they should purchase based on current gold
+        let chosenType = null;
+
+        if (enemyResources >= UNIT_TYPES.cavalry.cost && Math.random() < 0.25) {
+          chosenType = 'cavalry';
+        } else if (enemyResources >= UNIT_TYPES.spearman.cost && Math.random() < 0.3) {
+          chosenType = 'spearman';
+        } else if (enemyResources >= UNIT_TYPES.archer.cost && Math.random() < 0.35) {
+          chosenType = 'archer';
+        } else if (enemyResources >= UNIT_TYPES.swordsman.cost) {
+          chosenType = 'swordsman';
+        }
+
+        if (chosenType) {
+          const cost = UNIT_TYPES[chosenType].cost;
+          enemyResources -= cost; // Constrained by the exact same recruitment cost!
+          
+          // Spawn out of the enemy gate
+          const spawnX = canvas.width - 130 - (Math.random() * 20);
+          const spawnY = (canvas.height / 2) + (Math.random() * 140 - 70);
+
+          const enemy = new Soldier(chosenType, spawnX, spawnY, 'enemy');
+          enemy.behavior = 'charge';
+          enemy.targetX = 120; // Direct towards Allied gate
+          enemy.targetY = spawnY;
+
+          enemies.push(enemy);
+          spawnEffect(spawnX, spawnY, ENEMY_COLORS[chosenType], 10);
+        } else {
+          canAffordAndSpawn = false; // Out of resources
+        }
+      }
+    }
+
+    // Symmetrical Enemy Wave boost triggers
+    function triggerWaveBoost() {
+      if (gameFinished) return;
+      
+      // Every Wave Boost, give both sides a tactical 100 gold injection to escalate battle intensity!
+      resources += 100;
+      enemyResources += 100;
+
+      triggerFeedbackAlert(`⚠️ Strategic Wave Boost ${waveCounter}! Symmetrical Gold Sinks Injecting!`);
+      waveCounter++;
+    }
+
+    // Core State Update Tick
+    function updateGame() {
+      if (gameFinished) return;
+
+      // Check for Game Ends / Broken gates
+      if (allyGateHp <= 0) {
+        gameFinished = true;
+        document.getElementById('game-over-modal').classList.remove('hidden');
+        return;
+      }
+      if (enemyGateHp <= 0) {
+        gameFinished = true;
+        document.getElementById('game-victory-modal').classList.remove('hidden');
+        return;
+      }
+
+      systemPulse += 0.05;
+
+      // 1. Process Allies Update
+      for (let i = allies.length - 1; i >= 0; i--) {
+        allies[i].update();
+        if (allies[i].hp <= 0) {
+          spawnEffect(allies[i].x, allies[i].y, '#94a3b8', 12);
+          const selectIdx = selectedAllies.indexOf(allies[i]);
+          if (selectIdx !== -1) selectedAllies.splice(selectIdx, 1);
+          allies.splice(i, 1);
+        }
+      }
+
+      // 2. Process Enemies Update
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        enemies[i].update();
+        if (enemies[i].hp <= 0) {
+          spawnEffect(enemies[i].x, enemies[i].y, '#ef4444', 16);
+          enemiesDefeated++;
+          
+          // Symmetrical reward: Kill gives allied player +12 gold.
+          resources += 12; 
+          enemies.splice(i, 1);
+        }
+      }
+
+      // 3. Process Arrow projectiles
+      for (let i = projectiles.length - 1; i >= 0; i--) {
+        projectiles[i].update();
+        if (!projectiles[i].alive) {
+          projectiles.splice(i, 1);
+        }
+      }
+
+      // 4. Process Sparks, healing rings & floating text effects
+      for (let i = effects.length - 1; i >= 0; i--) {
+        const fx = effects[i];
+        fx.duration--;
+
+        if (fx.type === 'spark') {
+          fx.x += fx.vx;
+          fx.y += fx.vy;
+        } else if (fx.type === 'text') {
+          fx.y -= 0.4; 
+        }
+
+        if (fx.duration <= 0) {
+          effects.splice(i, 1);
+        }
+      }
+
+      updateUI();
+    }
+
+    // Canvas Frame Renderer
+    function drawGame() {
+      ctx.fillStyle = '#0b1329';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Grid design lines
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.03)';
+      ctx.lineWidth = 1;
+      const step = 40;
+      for (let x = 0; x < canvas.width; x += step) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = 0; y < canvas.height; y += step) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+
+      // Medics Healing Ring Aura Render
+      effects.forEach(fx => {
+        if (fx.type === 'aura') {
+          ctx.strokeStyle = fx.color;
+          ctx.fillStyle = fx.color.replace('0.2', '0.03');
+          ctx.lineWidth = 2;
+          const currentRad = fx.radius * (1 - fx.duration / fx.maxDuration);
+          ctx.beginPath();
+          ctx.arc(fx.x, fx.y, currentRad, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+      });
+
+      // Render the Active Assembly/Rally Point Flag
+      if (assemblyPoint) {
+        ctx.save();
+        ctx.translate(assemblyPoint.x, assemblyPoint.y);
+        
+        // Pulsing base circle marker
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.15)';
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, 10 + Math.sin(systemPulse * 2.5) * 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Flagpole
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, -20);
+        ctx.stroke();
+
+        // Triangular Rally Flag
+        ctx.fillStyle = '#38bdf8'; // Sky blue rally theme color
+        ctx.beginPath();
+        ctx.moveTo(0, -20);
+        ctx.lineTo(14, -15 + Math.sin(systemPulse) * 1.5);
+        ctx.lineTo(0, -10);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+      }
+
+      // ==========================================
+      // VISUAL CAMP 1: Allied Command Keep (LEFT)
+      // ==========================================
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(0, 0, 110, canvas.height);
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(100, 0, 10, canvas.height); 
+      
+      ctx.fillStyle = '#334155';
+      for (let y = 0; y < canvas.height; y += 30) {
+        ctx.fillRect(5, y, 90, 2);
+        ctx.fillRect(20 + (y % 40), y, 2, 30);
+      }
+
+      ctx.fillStyle = '#475569';
+      for (let y = 10; y < canvas.height; y += 40) {
+        ctx.fillRect(100, y, 12, 20); 
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(100, y + 20, 12, 2);
+        ctx.fillStyle = '#475569';
+      }
+
+      // Gatehouse
+      const centerY = canvas.height / 2;
+      ctx.fillStyle = '#111827';
+      ctx.fillRect(80, centerY - 45, 25, 90); 
+      ctx.fillStyle = '#78350f'; 
+      ctx.fillRect(82, centerY - 40, 8, 80);
+      
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 2;
+      for (let gy = centerY - 35; gy < centerY + 45; gy += 12) {
+        ctx.beginPath();
+        ctx.moveTo(82, gy);
+        ctx.lineTo(95, gy);
+        ctx.stroke();
+      }
+
+      // Blue Flag
+      ctx.save();
+      ctx.translate(35, centerY - 50);
+      ctx.fillStyle = '#94a3b8'; 
+      ctx.fillRect(0, -35, 3, 35);
+      ctx.fillStyle = '#2563eb'; 
+      ctx.beginPath();
+      ctx.moveTo(3, -35);
+      const waveX = Math.sin(systemPulse) * 4;
+      ctx.lineTo(25 + waveX, -28);
+      ctx.lineTo(3, -20);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.arc(8, -27, 2, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+
+      // Flanking Blue Torches
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.4)';
+      ctx.beginPath();
+      ctx.arc(95, centerY - 50, 15 + Math.sin(systemPulse * 4) * 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#60a5fa';
+      ctx.beginPath();
+      ctx.arc(95, centerY - 50, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.4)';
+      ctx.beginPath();
+      ctx.arc(95, centerY + 50, 15 + Math.sin(systemPulse * 4) * 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#60a5fa';
+      ctx.beginPath();
+      ctx.arc(95, centerY + 50, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Allied Gatehouse Life Line (Health Bar)
+      const allyHpPct = Math.max(0, allyGateHp / maxGateHp);
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(40, centerY - 65, 80, 8);
+      ctx.fillStyle = '#3b82f6'; // Bright Sky/Allied blue
+      ctx.fillRect(40, centerY - 65, 80 * allyHpPct, 8);
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(40, centerY - 65, 80, 8);
+
+
+      // ==========================================
+      // VISUAL CAMP 2: Enemy Siege Outpost (RIGHT)
+      // ==========================================
+      const rw = canvas.width - 110;
+      ctx.fillStyle = '#311010';
+      ctx.fillRect(rw, 0, 110, canvas.height);
+      ctx.fillStyle = '#180404';
+      ctx.fillRect(rw, 0, 10, canvas.height); 
+      
+      ctx.fillStyle = '#451a03';
+      for (let y = 0; y < canvas.height; y += 30) {
+        ctx.fillRect(rw + 15, y, 90, 2);
+        ctx.fillRect(rw + 20 + (y % 40), y, 2, 30);
+      }
+
+      ctx.fillStyle = '#1c1917';
+      ctx.strokeStyle = '#451a03';
+      ctx.lineWidth = 1;
+      for (let y = 10; y < canvas.height; y += 40) {
+        ctx.fillRect(rw - 2, y, 12, 20); 
+        ctx.beginPath();
+        ctx.moveTo(rw - 2, y + 10);
+        ctx.lineTo(rw - 12, y + 10);
+        ctx.lineTo(rw - 2, y + 15);
+        ctx.fill();
+      }
+
+      ctx.fillStyle = '#0f0505';
+      ctx.fillRect(rw, centerY - 45, 25, 90); 
+      ctx.fillStyle = '#1e1b4b'; 
+      ctx.fillRect(rw + 15, centerY - 40, 8, 80);
+
+      // Red Flag
+      ctx.save();
+      ctx.translate(canvas.width - 45, centerY - 50);
+      ctx.fillStyle = '#451a03'; 
+      ctx.fillRect(0, -35, 3, 35);
+      ctx.fillStyle = '#dc2626'; 
+      ctx.beginPath();
+      ctx.moveTo(3, -35);
+      const eWaveX = Math.cos(systemPulse) * 4;
+      ctx.lineTo(-25 + eWaveX, -28);
+      ctx.lineTo(3, -20);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#000000';
+      ctx.beginPath();
+      ctx.arc(-8, -27, 2.5, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+
+      // Flanking Red Torches
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.4)';
+      ctx.beginPath();
+      ctx.arc(rw + 15, centerY - 50, 15 + Math.sin(systemPulse * 4.2) * 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#f87171';
+      ctx.beginPath();
+      ctx.arc(rw + 15, centerY - 50, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.4)';
+      ctx.beginPath();
+      ctx.arc(rw + 15, centerY + 50, 15 + Math.sin(systemPulse * 4.2) * 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#f87171';
+      ctx.beginPath();
+      ctx.arc(rw + 15, centerY + 50, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Enemy Gatehouse Life Line (Health Bar)
+      const enemyHpPct = Math.max(0, enemyGateHp / maxGateHp);
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(canvas.width - 120, centerY - 65, 80, 8);
+      ctx.fillStyle = '#f43f5e'; // Deep Crimson/Enemy red
+      ctx.fillRect(canvas.width - 120, centerY - 65, 80 * enemyHpPct, 8);
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(canvas.width - 120, centerY - 65, 80, 8);
+
+
+      // ==========================================
+      // Physical Entities Drawing
+      // ==========================================
+      allies.forEach(unit => unit.draw());
+      enemies.forEach(unit => unit.draw());
+      projectiles.forEach(proj => proj.draw());
+
+      effects.forEach(fx => {
+        if (fx.type === 'spark') {
+          ctx.fillStyle = fx.color;
+          ctx.fillRect(fx.x, fx.y, fx.size, fx.size);
+        } else if (fx.type === 'text') {
+          ctx.fillStyle = fx.color;
+          ctx.font = 'bold 10px sans-serif';
+          ctx.fillText(fx.text, fx.x, fx.y);
+        }
+      });
+
+      // Box Selection Overlay
+      if (isDragging) {
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.08)';
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 1;
+        const width = selectionEnd.x - selectionStart.x;
+        const height = selectionEnd.y - selectionStart.y;
+        ctx.fillRect(selectionStart.x, selectionStart.y, width, height);
+        ctx.strokeRect(selectionStart.x, selectionStart.y, width, height);
+      }
+    }
+
+    // Input Controllers
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    function getMousePos(e) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (e.clientX - rect.left) * (canvas.width / rect.width),
+        y: (e.clientY - rect.top) * (canvas.height / rect.height)
+      };
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+      if (gameFinished) return;
+      const pos = getMousePos(e);
+      
+      // If setting assembly mode is active, handle setting position first
+      if (settingAssembly) {
+        assemblyPoint = { x: pos.x, y: pos.y };
+        spawnEffect(pos.x, pos.y, '#38bdf8', 20); // Spark rally effect
+        
+        // Reset button state
+        settingAssembly = false;
+        const btn = document.getElementById('btn-set-assembly');
+        btn.classList.add('bg-sky-600', 'hover:bg-sky-500');
+        btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-500', 'animate-pulse');
+        btn.innerHTML = '<i data-lucide="flag" class="w-4 h-4"></i> Set Rally Point';
+        lucide.createIcons();
+        triggerFeedbackAlert("Rally Point updated!");
+        return;
+      }
+
+      if (e.button === 0) {
+        isDragging = true;
+        selectionStart = { ...pos };
+        selectionEnd = { ...pos };
+      } 
+      else if (e.button === 2) {
+        if (selectedAllies.length > 0) {
+          const cols = Math.ceil(Math.sqrt(selectedAllies.length));
+          const spacing = 24;
+
+          selectedAllies.forEach((unit, idx) => {
+            const col = idx % cols;
+            const row = Math.floor(idx / cols);
+            const offsetX = (col - (cols - 1) / 2) * spacing;
+            const offsetY = (row - (Math.ceil(selectedAllies.length / cols) - 1) / 2) * spacing;
+
+            unit.targetX = pos.x + offsetX;
+            unit.targetY = pos.y + offsetY;
+            
+            unit.behavior = 'move';
+          });
+
+          effects.push({
+            type: 'aura',
+            x: pos.x,
+            y: pos.y,
+            radius: 30,
+            maxRadius: 30,
+            duration: 12,
+            maxDuration: 12,
+            color: 'rgba(59, 130, 246, 0.4)'
+          });
+        }
+      }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const pos = getMousePos(e);
+      selectionEnd = { ...pos };
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+      if (e.button !== 0 || settingAssembly) return;
+      isDragging = false;
+
+      const pos = getMousePos(e);
+      selectionEnd = { ...pos };
+
+      const xMin = Math.min(selectionStart.x, selectionEnd.x);
+      const xMax = Math.max(selectionStart.x, selectionEnd.x);
+      const yMin = Math.min(selectionStart.y, selectionEnd.y);
+      const yMax = Math.max(selectionStart.y, selectionEnd.y);
+
+      const dragWidth = xMax - xMin;
+      const dragHeight = yMax - yMin;
+
+      const isShift = e.shiftKey;
+
+      if (!isShift && dragWidth < 6 && dragHeight < 6) {
+        let clickedUnit = null;
+        for (let unit of allies) {
+          const d = unit.getDistanceTo(pos.x, pos.y);
+          if (d <= unit.size + 10) {
+            clickedUnit = unit;
+            break;
+          }
+        }
+
+        allies.forEach(u => u.isSelected = false);
+        selectedAllies = [];
+
+        if (clickedUnit) {
+          clickedUnit.isSelected = true;
+          selectedAllies.push(clickedUnit);
+        }
+      } else {
+        if (!isShift) {
+          allies.forEach(u => u.isSelected = false);
+          selectedAllies = [];
+        }
+
+        allies.forEach(unit => {
+          if (unit.x >= xMin && unit.x <= xMax && unit.y >= yMin && unit.y <= yMax) {
+            if (isShift) {
+              const idx = selectedAllies.indexOf(unit);
+              if (idx === -1) {
+                unit.isSelected = true;
+                selectedAllies.push(unit);
+              } else {
+                unit.isSelected = false;
+                selectedAllies.splice(idx, 1);
+              }
+            } else {
+              unit.isSelected = true;
+              selectedAllies.push(unit);
+            }
+          }
+        });
+      }
+
+      updateUI();
+    });
+
+    // Touch Support Controls
+    canvas.addEventListener('touchstart', (e) => {
+      if (gameFinished) return;
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        const pos = {
+          x: (touch.clientX - rect.left) * (canvas.width / rect.width),
+          y: (touch.clientY - rect.top) * (canvas.height / rect.height)
+        };
+        
+        isDragging = true;
+        selectionStart = { ...pos };
+        selectionEnd = { ...pos };
+      }
+    });
+
+    canvas.addEventListener('touchmove', (e) => {
+      if (!isDragging) return;
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        const pos = {
+          x: (touch.clientX - rect.left) * (canvas.width / rect.width),
+          y: (touch.clientY - rect.top) * (canvas.height / rect.height)
+        };
+        selectionEnd = { ...pos };
+      }
+    });
+
+    canvas.addEventListener('touchend', (e) => {
+      isDragging = false;
+      updateUI();
+    });
+
+    // Key Hotkeys
+    window.addEventListener('keydown', (e) => {
+      if (gameFinished) return;
+      if (e.key === 'q' || e.key === 'Q') setBehavior('charge');
+      if (e.key === 'w' || e.key === 'W') setBehavior('move');
+      if (e.key === 'e' || e.key === 'E') setBehavior('defend');
+      if (e.key === '1') applyFormation('line');
+      if (e.key === '2') applyFormation('wedge');
+      if (e.key === '3') applyFormation('box');
+    });
+
+    // Setup Game
+    window.onload = function() {
+      window.addEventListener('resize', resizeCanvas);
+      resizeCanvas();
+
+      lucide.createIcons();
+      resetGame();
+
+      // Steady gold treasury (1 second cycle) - Symmetrical generation on both sides!
+      setInterval(() => {
+        if (!gameFinished) {
+          resources += resourcePerSecond;
+          enemyResources += resourcePerSecond; // Symmetrical gold rise
+          
+          // Let the Enemy AI process deployment logic with their accumulated resources
+          handleEnemyAILogic();
+
+          updateUI();
+        }
+      }, 1000);
+
+      // Wave countdown timer
+      setInterval(() => {
+        if (!gameFinished) {
+          nextWaveTime--;
+          if (nextWaveTime <= 0) {
+            triggerWaveBoost();
+            nextWaveTime = 15 + (waveCounter * 3); 
+          }
+          updateUI();
+        }
+      }, 1000);
+
+      // Simulation Loop
+      function loop() {
+        updateGame();
+        drawGame();
+        requestAnimationFrame(loop);
+      }
+      requestAnimationFrame(loop);
+    };
+
+  </script>
+</body>
+</html>
